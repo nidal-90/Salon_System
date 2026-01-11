@@ -1,0 +1,29 @@
+/* src/app/layout/AppShell.module.css */
+.shell {
+  min-height: 100dvh;
+  padding: clamp(10px, 2vw, 22px);
+}
+
+.top {
+  position: sticky;
+  top: 12px;              /* etwas harmonischer */
+  z-index: 30;
+  margin: 0 auto 14px auto;
+  max-width: 1180px;
+}
+
+.main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-top: 6px;       /* kleine Entkopplung vom sticky */
+}
+
+.mainKiosk {
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+@media (max-width: 520px) {
+  .shell { padding: 10px; }
+  .top { top: 8px; margin-bottom: 10px; }
+}

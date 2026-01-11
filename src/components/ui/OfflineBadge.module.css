@@ -1,0 +1,10 @@
+.wrap{ margin-bottom: 12px; }
+.badge{
+  display:inline-flex;
+  padding:10px 12px;
+  border-radius: 14px;
+  border:1px solid rgba(229,72,77,.25);
+  background: rgba(229,72,77,.08);
+  color: rgba(10,10,10,.80);
+  font-weight: 700;
+}

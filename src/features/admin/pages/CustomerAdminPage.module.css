@@ -1,0 +1,201 @@
+.rightTools {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.btnPrimary {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--primary, #2f7cf6);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(0,0,0,.10);
+}
+
+.btnPrimary:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.modalFooterRow {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.createTabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tabBtn {
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.75);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tabBtnActive {
+  background: rgba(0,0,0,.85);
+  color: #fff;
+  border-color: rgba(0,0,0,.0);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.labelRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.label {
+  font-weight: 700;
+}
+
+.hintInline {
+  font-size: 12px;
+  opacity: .75;
+}
+
+.input {
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,.85);
+  outline: none;
+}
+
+.input:focus {
+  border-color: rgba(47,124,246,.55);
+  box-shadow: 0 0 0 4px rgba(47,124,246,.12);
+}
+
+.error {
+  color: #b42318;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.checkRow {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(0,0,0,.03);
+  border: 1px solid rgba(0,0,0,.06);
+}
+
+.noteRow {
+  margin-top: 10px;
+}
+
+.payRow {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(0,0,0,.03);
+  border: 1px solid rgba(0,0,0,.06);
+}
+
+.payLabel {
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.pillSm {
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.75);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pillSmActive {
+  background: rgba(0,0,0,.85);
+  color: #fff;
+  border-color: rgba(0,0,0,.0);
+}
+
+.members {
+  grid-column: 1 / -1;
+  border: 1px solid rgba(0,0,0,.08);
+  background: rgba(255,255,255,.65);
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.membersHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.btnSmall {
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.85);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.memberRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 900px) {
+  .memberRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+.memberCol {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.danger {
+  border: 1px solid rgba(180, 35, 24, .25);
+  background: rgba(180, 35, 24, .06);
+  color: #b42318;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 800;
+  cursor: pointer;
+}

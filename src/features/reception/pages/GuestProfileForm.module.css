@@ -1,0 +1,32 @@
+.wrap{ display:grid; gap: 12px; }
+.title{ font-weight: 900; font-size: 16px; }
+
+.grid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.field{ display:grid; gap: 6px; font-size: 13px; color: var(--muted); }
+.field input{
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.actions{ display:flex; justify-content:flex-end; gap: 10px; }
+
+.btn{
+  border: 0;
+  background: var(--primary);
+  color: var(--primaryText);
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.msg{ font-size: 13px; color: rgba(0,0,0,0.70); }
+.note{ font-size: 12px; color: var(--muted); }

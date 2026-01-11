@@ -1,0 +1,11 @@
+.card{
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+.hint{
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
