@@ -2,11 +2,13 @@
 export const DB_NAME = "sibel_salon_system";
 
 /**
- * v1 war minimal
- * v2 ist dein aktuelles Schema
- * v3: Gutscheine/Coupons (vouchers) hinzugefügt
+ * v4:
+ * - areas: displayNo (01/02...) für UI (DB-ID bleibt stabil als FK)
+ * - product_categories: displayNo
+ * - service_catalog: kein Kategorie-Workflow mehr, Name statt Titel
+ * - product_catalog: categoryId (FK) statt category string, Name statt Titel
  */
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 export const schemaV2 = {
   areas: `
@@ -16,7 +18,6 @@ export const schemaV2 = {
     active,
     sortOrder
   `,
-
   staff: `
     id,
     name,
@@ -29,7 +30,6 @@ export const schemaV2 = {
     baseSalary,
     yearlyVacationDays
   `,
-
   staff_events: `
     id,
     staffId,
@@ -39,7 +39,6 @@ export const schemaV2 = {
     payload,
     [staffId+dateKey+type]
   `,
-
   customers: `
     id,
     createdAt,
@@ -54,7 +53,6 @@ export const schemaV2 = {
     lastServedByStaffId,
     lastServedByStaffName
   `,
-
   customer_history: `
     id,
     customerId,
@@ -67,7 +65,6 @@ export const schemaV2 = {
     payload,
     [customerId+createdAt]
   `,
-
   product_catalog: `
     id,
     sku,
@@ -78,7 +75,6 @@ export const schemaV2 = {
     category,
     sortOrder
   `,
-
   service_catalog: `
     id,
     areaId,
@@ -89,7 +85,6 @@ export const schemaV2 = {
     sortOrder,
     [areaId+category]
   `,
-
   service_categories: `
     id,
     areaId,
@@ -98,7 +93,6 @@ export const schemaV2 = {
     sortOrder,
     [areaId+title]
   `,
-
   product_categories: `
     id,
     title,
@@ -106,7 +100,6 @@ export const schemaV2 = {
     sortOrder,
     [title]
   `,
-
   visits: `
     id,
     createdAt,
@@ -121,7 +114,6 @@ export const schemaV2 = {
     preferredPaymentMode,
     readyForCheckoutAt
   `,
-
   visit_members: `
     id,
     visitId,
@@ -132,7 +124,6 @@ export const schemaV2 = {
     createdAt,
     [visitId+role]
   `,
-
   visit_area_state: `
     id,
     visitId,
@@ -149,7 +140,6 @@ export const schemaV2 = {
     [visitId+areaId],
     [dateKey+areaId+status]
   `,
-
   visit_services: `
     id,
     visitId,
@@ -167,7 +157,6 @@ export const schemaV2 = {
     [visitId+areaId],
     [visitId+memberId]
   `,
-
   visit_products: `
     id,
     visitId,
@@ -181,7 +170,6 @@ export const schemaV2 = {
     [staffId+dateKey],
     [visitId+memberId]
   `,
-
   payments_today: `
     id,
     visitId,
@@ -196,12 +184,10 @@ export const schemaV2 = {
     [dateKey+method],
     [visitId+memberId]
   `,
-
   daily_counters: `
     dateKey,
     guestNextNumber
   `,
-
   absences: `
     id,
     staffId,
@@ -210,7 +196,6 @@ export const schemaV2 = {
     createdAt,
     [staffId+dateKey]
   `,
-
   advances: `
     id,
     staffId,
@@ -220,7 +205,6 @@ export const schemaV2 = {
     note,
     [staffId+dateKey]
   `,
-
   manual_sales: `
     id,
     monthKey,
@@ -233,14 +217,8 @@ export const schemaV2 = {
   `,
 };
 
-/**
- * v3 erweitert v2 um vouchers.
- * WICHTIG: code ist indexiert, status+createdAt sind hilfreich fürs UI.
- * Hinweis: Dexie "unique" wird über & im schema gesetzt.
- */
 export const schemaV3 = {
   ...schemaV2,
-
   vouchers: `
     id,
     &code,
@@ -258,5 +236,48 @@ export const schemaV3 = {
     note,
     [status+createdAt],
     [customerId+createdAt]
+  `,
+};
+
+/**
+ * v4: New “clean catalog” fields.
+ * - areas: displayNo index
+ * - product_categories: displayNo index
+ * - service_catalog: name (category removed from workflow)
+ * - product_catalog: categoryId (FK) + name
+ */
+export const schemaV4 = {
+  ...schemaV3,
+
+  areas: `
+    id,
+    displayNo,
+    name,
+    active
+  `,
+
+  product_categories: `
+    id,
+    displayNo,
+    title,
+    active
+  `,
+
+  service_catalog: `
+    id,
+    areaId,
+    name,
+    price,
+    active,
+    [areaId+name]
+  `,
+
+  product_catalog: `
+    id,
+    categoryId,
+    name,
+    price,
+    active,
+    [categoryId+name]
   `,
 };

@@ -21,18 +21,6 @@ const TEST_STAFF = [
   { name: "SEMRA", commissionPct: 40, baseSalary: 584 },
   { name: "HOSSAIN", commissionPct: 35, baseSalary: 584 },
   { name: "MERCAN", commissionPct: 35, baseSalary: 0 },
-  { name: "Ylenia", commissionPct: 35, baseSalary: 0 },
-  { name: "Selda", commissionPct: 35, baseSalary: 0 },
-  { name: "Yasmin", commissionPct: 35, baseSalary: 0 },
-  { name: "Aysima", commissionPct: 100, baseSalary: 680 },
-  { name: "Hilal", commissionPct: 100, baseSalary: 0 },
-  { name: "Seda", commissionPct: 35, baseSalary: 0 },
-  { name: "Sude", commissionPct: 50, baseSalary: 0 },
-  { name: "Serap", commissionPct: 35, baseSalary: 556 },
-  { name: "Parisa", commissionPct: 100, baseSalary: 680 },
-  { name: "zeynep", commissionPct: 50, baseSalary: 0 },
-  { name: "songül", commissionPct: 0, baseSalary: 0 },
-  { name: "turban", commissionPct: 50, baseSalary: 0 },
 ];
 
 function asMoney(n) {
@@ -42,20 +30,33 @@ function asMoney(n) {
 }
 
 export async function seedIfEmpty() {
-  const [areasCount, staffCount] = await Promise.all([db.areas.count(), db.staff.count()]);
+  const [areasCount, staffCount, catCount] = await Promise.all([
+    db.areas.count(),
+    db.staff.count(),
+    db.product_categories.count(),
+  ]);
 
-  // AREAS (nur wenn leer)
+  // Areas
   if (areasCount === 0) {
     await db.areas.bulkPut([
-      { id: "cut_women", code: "CUT_W", name: "Haarschnitt Damen", active: 1, sortOrder: 10 },
-      { id: "cut_men", code: "CUT_M", name: "Haarschnitt Herren", active: 1, sortOrder: 20 },
-      { id: "color", code: "COLOR", name: "Farbe", active: 1, sortOrder: 30 },
-      { id: "makeup", code: "MU", name: "Make-up", active: 1, sortOrder: 40 },
-      { id: "brows", code: "BROWS", name: "Augenbrauen", active: 1, sortOrder: 50 },
+      { id: crypto.randomUUID(), displayNo: 1, name: "Haarschnitt Damen", active: 1, code: "", sortOrder: 0 },
+      { id: crypto.randomUUID(), displayNo: 2, name: "Haarschnitt Herren", active: 1, code: "", sortOrder: 0 },
+      { id: crypto.randomUUID(), displayNo: 3, name: "Farbe", active: 1, code: "", sortOrder: 0 },
+      { id: crypto.randomUUID(), displayNo: 4, name: "Make-up", active: 1, code: "", sortOrder: 0 },
+      { id: crypto.randomUUID(), displayNo: 5, name: "Augenbrauen", active: 1, code: "", sortOrder: 0 },
+      { id: crypto.randomUUID(), displayNo: 6, name: "SPA", active: 1, code: "", sortOrder: 0 },
     ]);
   }
 
-  // STAFF (nur wenn leer) – exakte Reihenfolge wie alt via sortOrder
+  // Product categories
+  if (catCount === 0) {
+    await db.product_categories.bulkPut([
+      { id: crypto.randomUUID(), displayNo: 1, title: "HairCare", active: 1, sortOrder: 0 },
+      { id: crypto.randomUUID(), displayNo: 2, title: "Beauty", active: 1, sortOrder: 0 },
+    ]);
+  }
+
+  // Staff
   if (staffCount === 0) {
     const rows = TEST_STAFF.map((s, idx) => ({
       id: crypto.randomUUID(),
@@ -64,13 +65,12 @@ export async function seedIfEmpty() {
       role: "staff",
       usbKeyId: "",
       areaIds: [],
-      sortOrder: idx + 1, // exakt alte Reihenfolge
+      sortOrder: idx + 1,
       commissionPct: Number(s.commissionPct ?? 100),
       baseSalary: asMoney(s.baseSalary ?? 0),
       yearlyVacationDays: 20,
     }));
 
-    // optional: Admin/Kasse vorne
     rows.unshift({
       id: crypto.randomUUID(),
       name: "Admin",

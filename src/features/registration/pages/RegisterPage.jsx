@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getNextGuestDisplayName } from "../services/guestCounter.js";
+import { db } from "../../../db/index.js";
 import styles from "./RegisterPage.module.css";
 
 /** Helpers */
@@ -8,27 +8,21 @@ const onlyDigits = (s) => (s || "").replace(/\D/g, "");
 
 const normalizeInstagram = (value) => {
   let v = (value || "").trim();
-
-  // allow @handle
   if (v.startsWith("@")) v = v.slice(1);
-
-  // if URL given, extract handle
   v = v.replace(/^https?:\/\/(www\.)?instagram\.com\//i, "");
   v = v.split(/[/?#]/)[0];
-
   return v;
 };
 
 const isValidEmail = (email) => {
   const v = (email || "").trim();
-  if (!v) return true; // optional field is okay
-  // pragmatic email check
+  if (!v) return true;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 };
 
 const isValidInstagramHandle = (handle) => {
   const v = (handle || "").trim();
-  if (!v) return true; // optional is okay
+  if (!v) return true;
   if (v.length < 1 || v.length > 30) return false;
   if (!/^[a-zA-Z0-9._]+$/.test(v)) return false;
   if (v.endsWith(".")) return false;
@@ -36,11 +30,17 @@ const isValidInstagramHandle = (handle) => {
   return true;
 };
 
+function uid(prefix = "id") {
+  return `${prefix}_${crypto.randomUUID()}`;
+}
+
 export default function RegisterPage() {
   const nav = useNavigate();
 
-  const [mode, setMode] = useState("profile"); // profile|guest|wedding
+  const [mode, setMode] = useState("profile"); // profile|wedding
   const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
 
   const [profile, setProfile] = useState({
     fullName: "",
@@ -63,7 +63,6 @@ export default function RegisterPage() {
 
   const [members, setMembers] = useState([{ displayName: "Braut", phone: "" }]);
 
-  // Validation
   const errors = useMemo(() => {
     const e = {};
 
@@ -99,10 +98,7 @@ export default function RegisterPage() {
     return e;
   }, [mode, profile, wedding, members]);
 
-  const isValid = useMemo(() => {
-    if (mode === "guest") return true;
-    return Object.keys(errors).length === 0;
-  }, [mode, errors]);
+  const isValid = useMemo(() => Object.keys(errors).length === 0, [errors]);
 
   function addMember() {
     setMembers((p) => [...p, { displayName: "", phone: "" }]);
@@ -114,58 +110,122 @@ export default function RegisterPage() {
     setMembers((p) => p.filter((_, idx) => idx !== i));
   }
 
-  async function next() {
-    if (!isValid) return;
+  async function save() {
+    if (!isValid || saving) return;
 
-    let payload = { mode, note: note.trim() };
+    setSaving(true);
+    setMsg("");
 
-    if (mode === "guest") {
-      const displayName = await getNextGuestDisplayName();
-      payload.displayName = displayName;
-      payload.customer = null;
-      payload.group = null;
-    }
+    const now = new Date().toISOString();
 
-    if (mode === "profile") {
-      const instagram = normalizeInstagram(profile.instagram);
-      payload.displayName = profile.fullName.trim();
-      payload.customer = {
-        fullName: profile.fullName.trim(),
-        phone: profile.phone.trim(),
-        email: profile.email.trim(),
-        instagram,
-        address: {
-          street: profile.street.trim(),
-          city: profile.city.trim(),
-        },
-      };
-      payload.group = null;
-    }
+    try {
+      // 1) Single customer profile
+      if (mode === "profile") {
+        const customerId = uid("cust");
+        const fullName = profile.fullName.trim();
 
-    if (mode === "wedding") {
-      payload.displayName = wedding.title.trim();
-      payload.customer = {
-        fullName: wedding.contactName.trim(),
-        phone: wedding.phone.trim(),
-        email: wedding.email.trim(),
-        instagram: "",
-        address: {
-          street: wedding.street.trim(),
-          city: wedding.city.trim(),
-        },
-      };
-      payload.group = {
-        title: wedding.title.trim(),
-        paymentMode: wedding.paymentMode,
-        members: members.map((m) => ({
+        // split name (simple heuristic)
+        const [firstName, ...rest] = fullName.split(" ");
+        const lastName = rest.join(" ");
+
+        await db.transaction("rw", db.customers, db.customer_history, async () => {
+          await db.customers.add({
+            id: customerId,
+            createdAt: now,
+            updatedAt: now,
+            firstName: firstName || fullName,
+            lastName: lastName || "",
+            phone: profile.phone.trim(),
+            email: profile.email.trim(),
+            instagram: normalizeInstagram(profile.instagram),
+            marketingConsent: 0,
+            lastVisitAt: null,
+            lastServedByStaffId: null,
+            lastServedByStaffName: null,
+            addressStreet: (profile.street || "").trim(),
+            addressCity: (profile.city || "").trim(),
+          });
+
+          const n = note.trim();
+          if (n) {
+            await db.customer_history.add({
+              id: uid("hist"),
+              customerId,
+              createdAt: now,
+              visitId: null,
+              areaId: null,
+              staffId: null,
+              staffName: null,
+              type: "NOTE",
+              payload: JSON.stringify({ note: n }),
+            });
+          }
+        });
+
+        // Ziel: zurück zur Reception oder Start (deine Wahl)
+        nav("/reception", { replace: true });
+        return;
+      }
+
+      // 2) Wedding/Group: contact as customer + group data in history
+      if (mode === "wedding") {
+        const customerId = uid("cust");
+        const title = wedding.title.trim();
+
+        const contactName = wedding.contactName.trim();
+        const [firstName, ...rest] = contactName.split(" ");
+        const lastName = rest.join(" ");
+
+        const membersClean = members.map((m) => ({
           displayName: (m.displayName || "").trim(),
           phone: (m.phone || "").trim(),
-        })),
-      };
-    }
+        }));
 
-    sessionStorage.setItem("kiosk_profile", JSON.stringify(payload));
-    nav("/order");
+        await db.transaction("rw", db.customers, db.customer_history, async () => {
+          await db.customers.add({
+            id: customerId,
+            createdAt: now,
+            updatedAt: now,
+            firstName: firstName || contactName,
+            lastName: lastName || "",
+            phone: wedding.phone.trim(),
+            email: wedding.email.trim(),
+            instagram: "",
+            marketingConsent: 0,
+            lastVisitAt: null,
+            lastServedByStaffId: null,
+            lastServedByStaffName: null,
+            addressStreet: (wedding.street || "").trim(),
+            addressCity: (wedding.city || "").trim(),
+            // optional: flag for group contact
+            groupTitle: title,
+          });
+
+          await db.customer_history.add({
+            id: uid("hist"),
+            customerId,
+            createdAt: now,
+            visitId: null,
+            areaId: null,
+            staffId: null,
+            staffName: null,
+            type: "GROUP_CREATED",
+            payload: JSON.stringify({
+              title,
+              paymentMode: wedding.paymentMode,
+              members: membersClean,
+              note: note.trim() || "",
+            }),
+          });
+        });
+
+        nav("/reception", { replace: true });
+      }
+    } catch (e) {
+      setMsg(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -174,7 +234,7 @@ export default function RegisterPage() {
         <header className={styles.header}>
           <div>
             <h2 className={styles.title}>Kunde registrieren</h2>
-            <p className={styles.sub}>Profil, Gast oder Hochzeit/Gruppe.</p>
+            <p className={styles.sub}>Nur Kunde oder Hochzeit/Gruppe anlegen (kein Check-in).</p>
           </div>
         </header>
 
@@ -186,17 +246,9 @@ export default function RegisterPage() {
             role="tab"
             aria-selected={mode === "profile"}
           >
-            Profil
+            Kunde
           </button>
-          <button
-            className={`${styles.segBtn} ${mode === "guest" ? styles.segBtnActive : ""}`}
-            onClick={() => setMode("guest")}
-            type="button"
-            role="tab"
-            aria-selected={mode === "guest"}
-          >
-            Gast
-          </button>
+
           <button
             className={`${styles.segBtn} ${mode === "wedding" ? styles.segBtnActive : ""}`}
             onClick={() => setMode("wedding")}
@@ -247,9 +299,7 @@ export default function RegisterPage() {
                 <input
                   className={styles.input}
                   value={profile.instagram}
-                  onChange={(e) =>
-                    setProfile((p) => ({ ...p, instagram: normalizeInstagram(e.target.value) }))
-                  }
+                  onChange={(e) => setProfile((p) => ({ ...p, instagram: normalizeInstagram(e.target.value) }))}
                   placeholder="z. B. salon.system"
                 />
               </Field>
@@ -271,18 +321,6 @@ export default function RegisterPage() {
                   placeholder="Stadt"
                 />
               </Field>
-            </div>
-          </section>
-        )}
-
-        {mode === "guest" && (
-          <section className={styles.section}>
-            <div className={styles.infoBox}>
-              <div className={styles.infoTitle}>Gast-Check-in</div>
-              <p className={styles.infoText}>
-                Gast bekommt automatisch eine Nummer (z. B. Gast #12). Reset jeden Tag.
-                Keine Pflichtdaten erforderlich.
-              </p>
             </div>
           </section>
         )}
@@ -418,14 +456,15 @@ export default function RegisterPage() {
               placeholder="z. B. Allergie, Wunsch, Hinweis..."
             />
           </Field>
+          {msg && <div className={styles.error} style={{ marginTop: 10 }}>{msg}</div>}
         </section>
 
         <footer className={styles.footer}>
           <button className={`${styles.btn} ${styles.btnSecondary}`} onClick={() => nav("/start")} type="button">
             Zurück
           </button>
-          <button className={styles.btn} onClick={next} disabled={!isValid} type="button">
-            Weiter
+          <button className={styles.btn} onClick={save} disabled={!isValid || saving} type="button">
+            {saving ? "Speichern..." : "Speichern"}
           </button>
         </footer>
       </div>

@@ -27,44 +27,30 @@ export default function KioskOrderEmbed({ profile, onDone }) {
   const [sending, setSending] = useState(false);
   const [msg, setMsg] = useState("");
 
-  useEffect(() => {
-    db.service_catalog.where("active").equals(1).sortBy("sortOrder").then(setServices);
-    db.product_catalog.where("active").equals(1).sortBy("sortOrder").then(setProducts);
-    db.staff.toArray().then(setStaff);
-  }, []);
+ useEffect(() => {
+  // Services (active kann 1 oder true sein)
+  db.service_catalog.toArray().then((rows) => {
+    const list = rows
+      .map((s) => ({
+        ...s,
+        category: (s.category || "Allgemein").trim() || "Allgemein",
+      }))
+      .filter((s) => s.active === 1 || s.active === true)
+      .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+    setServices(list);
+  });
 
-  const displayName = profile?.displayName || "Kunde";
+  // Products (active kann 1 oder true sein)
+  db.product_catalog.toArray().then((rows) => {
+    const list = rows
+      .filter((p) => p.active === 1 || p.active === true)
+      .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+    setProducts(list);
+  });
 
-  const categories = useMemo(() => {
-    const set = new Set(services.map((s) => s.category || "Allgemein"));
-    return Array.from(set);
-  }, [services]);
+  db.staff.toArray().then(setStaff);
+}, []);
 
-  const selectedServices = useMemo(() => {
-    return services.filter((s) => selectedServiceIds.has(s.id));
-  }, [services, selectedServiceIds]);
-
-  const requestedAreaIds = useMemo(() => {
-    const set = new Set(selectedServices.map((s) => s.areaId));
-    return Array.from(set);
-  }, [selectedServices]);
-
-  const staffByArea = useMemo(() => {
-    const map = {};
-    for (const s of staff) {
-      let ids = [];
-      try {
-        ids = Array.isArray(s.areaIds) ? s.areaIds : JSON.parse(s.areaIds || "[]");
-      } catch {
-        ids = [];
-      }
-      ids.forEach((a) => {
-        if (!map[a]) map[a] = [];
-        map[a].push(s);
-      });
-    }
-    return map;
-  }, [staff]);
 
   function toggleService(id) {
     setSelectedServiceIds((prev) => {

@@ -7,7 +7,7 @@ import { receptionRoutes } from "../../features/reception/reception.routes.jsx";
 import { staffRoutes } from "../../features/staff/staff.routes.jsx";
 import { adminRoutes } from "../../features/admin/admin.routes.jsx";
 
-// Kiosk (wenn du es noch so hast)
+// Kiosk
 import KioskOrderPage from "../../features/kiosk/pages/KioskOrderPage.jsx";
 
 function renderRouteList(list) {
@@ -20,7 +20,6 @@ export default function AppRoutes() {
     ...receptionRoutes(),
     ...staffRoutes(),
     ...adminRoutes(),
-    // kiosk optional
     { path: "/order", element: <KioskOrderPage /> },
   ];
 

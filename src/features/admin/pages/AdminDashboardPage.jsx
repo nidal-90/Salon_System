@@ -9,18 +9,18 @@ export default function AdminDashboardPage() {
 
   const [staff, setStaff] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [areas, setAreas] = useState([]);
   const [services, setServices] = useState([]);
   const [products, setProducts] = useState([]);
+  const [vouchers, setVouchers] = useState([]);
 
   useEffect(() => {
     (async () => {
-      const [s, c, a, svc, p] = await Promise.all([
+      const [s, c, svc, p, v] = await Promise.all([
         db.staff.toArray(),
         db.customers.toArray(),
-        db.areas.toArray(),
         db.service_catalog.toArray(),
         db.product_catalog.toArray(),
+        db.vouchers.toArray(),
       ]);
 
       s.sort(
@@ -28,17 +28,12 @@ export default function AdminDashboardPage() {
           Number(x.sortOrder ?? 9999) - Number(y.sortOrder ?? 9999) ||
           String(x.name || "").localeCompare(String(y.name || ""))
       );
-      a.sort(
-        (x, y) =>
-          Number(x.sortOrder ?? 9999) - Number(y.sortOrder ?? 9999) ||
-          String(x.name || "").localeCompare(String(y.name || ""))
-      );
 
       setStaff(s);
       setCustomers(c);
-      setAreas(a);
       setServices(svc);
       setProducts(p);
+      setVouchers(v);
     })();
   }, []);
 
@@ -50,7 +45,7 @@ export default function AdminDashboardPage() {
   return (
     <AdminShell
       title="Admin Control"
-      subtitle="Zentrale Verwaltung: Mitarbeiter, Kunden, Bereiche, Katalog und Umsätze. Alles im selben Stil – clean und salon-tauglich."
+      subtitle="Zentrale Verwaltung: Mitarbeiter, Kunden, Katalog, Gutscheine und Umsätze. Alles clean und salon-tauglich."
     >
       <div className={styles.grid}>
         <div className={styles.kpi}>
@@ -66,9 +61,9 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className={styles.kpi}>
-          <div className={styles.kpiLabel}>Bereiche</div>
-          <div className={styles.kpiVal}>{areas.length}</div>
-          <div className={styles.kpiMeta}>Zonen / Klassen</div>
+          <div className={styles.kpiLabel}>Gutscheine</div>
+          <div className={styles.kpiVal}>{vouchers.length}</div>
+          <div className={styles.kpiMeta}>Aktiv / eingelöst / storniert</div>
         </div>
 
         <div className={styles.kpi}>
@@ -79,7 +74,6 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* Vollbreite: genau über die Breite der 4 KPI-Karten */}
         <div className={styles.panelWide}>
           <div className={styles.panelHead}>
             <div>
@@ -103,17 +97,17 @@ export default function AdminDashboardPage() {
               </div>
             </button>
 
-            <button className={styles.action} onClick={() => nav("/admin/areas")}>
-              <div className={styles.actionTitle}>Behandlung definieren</div>
-              <div className={styles.actionMeta}>
-                Haarschnitt, Farbe, Make-up … Sortierung & Aktiv
-              </div>
-            </button>
-
             <button className={styles.action} onClick={() => nav("/admin/catalog")}>
               <div className={styles.actionTitle}>Produkte & Services verwalten</div>
               <div className={styles.actionMeta}>
-                Kategorien (Dropdown), Services pro Bereich, Produkte
+                Services pro Bereich, Produkt-Kategorien, Produkte
+              </div>
+            </button>
+
+            <button className={styles.action} onClick={() => nav("/admin/vouchers")}>
+              <div className={styles.actionTitle}>Gutscheine verwalten</div>
+              <div className={styles.actionMeta}>
+                Neue erstellen, Status sehen, Storno
               </div>
             </button>
 

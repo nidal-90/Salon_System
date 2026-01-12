@@ -14,6 +14,8 @@ export function receptionRoutes() {
   return [
     { path: "/reception", element: guard(<ReceptionHome/>) },
     { path: "/reception/checkin", element: guard(<ReceptionCheckInPage />) },
+
+    /// später echte Pages
     { path: "/reception/checkout", element: guard(<ReceptionDashboardPage />) },
     { path: "/reception/liveboard", element: guard(<ReceptionDashboardPage />) },
     { path: "/reception/summary", element: guard(<ReceptionDashboardPage />) },

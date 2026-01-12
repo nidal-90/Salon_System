@@ -7,6 +7,7 @@ import { nextGuestDisplayName } from "../../../services/guest/guestCounter.js";
 import KioskOrderEmbed from "../../kiosk/pages/KioskOrderEmbed.jsx";
 import styles from "./ReceptionCheckInPage.module.css";
 
+
 function safeName(c) {
   const a = String(c.firstName || "").trim();
   const b = String(c.lastName || "").trim();
