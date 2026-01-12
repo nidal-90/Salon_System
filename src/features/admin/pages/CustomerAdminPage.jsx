@@ -1,11 +1,12 @@
+// src/features/admin/pages/CustomerAdminPage.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminShell from "../components/AdminShell.jsx";
 import Modal from "../components/Modal.jsx";
-import { db } from "../../../db/index.js";
 import styles from "./CustomerAdminPage.module.css";
+import { db } from "../../../db/index.js";
 
-/** ---------- Null-safe helpers ---------- */
+/* ---------- Helpers ---------- */
 function safeCustomer(c) {
   return c && typeof c === "object" ? c : null;
 }
@@ -46,10 +47,7 @@ function isValidInstagramHandle(handle) {
 }
 
 function splitFullName(fullName) {
-  const parts = String(fullName || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+  const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return { firstName: "", lastName: "" };
   if (parts.length === 1) return { firstName: parts[0], lastName: "" };
   return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
@@ -58,113 +56,35 @@ function splitFullName(fullName) {
 function fmtDateTime(iso) {
   const s = String(iso || "");
   if (!s) return "-";
+  // 2026-01-12T19:52:00.000Z -> 2026-01-12 19:52
   return s.replace("T", " ").slice(0, 16);
 }
 
-function nowIso() {
-  return new Date().toISOString();
+function isGroup(c) {
+  return String(c?.kind || "") === "group" || !!c?.group;
 }
 
-/** ---------- Data mapping for forms ---------- */
-function toEditFormFromCustomer(c) {
-  const x = safeCustomer(c);
-  if (!x) {
-    return {
-      kind: "profile",
-      displayName: "",
-      firstName: "",
-      lastName: "",
-      phone: "",
-      email: "",
-      instagram: "",
-      street: "",
-      city: "",
-      marketingConsent: false,
-      note: "",
-      // group
-      groupTitle: "",
-      contactName: "",
-      groupPaymentMode: "single",
-      members: [],
-    };
-  }
-
-  const street = x.address?.street || "";
-  const city = x.address?.city || "";
-
-  if (x.kind === "group") {
-    const title = String(x.displayName || x.group?.title || "").trim();
-    const contactName = `${String(x.firstName || "").trim()} ${String(x.lastName || "").trim()}`.trim();
-    return {
-      kind: "group",
-      displayName: title,
-      firstName: String(x.firstName || ""),
-      lastName: String(x.lastName || ""),
-      phone: String(x.phone || ""),
-      email: String(x.email || ""),
-      instagram: "",
-      street: String(street || ""),
-      city: String(city || ""),
-      marketingConsent: !!x.marketingConsent,
-      note: String(x.note || ""),
-      groupTitle: title,
-      contactName,
-      groupPaymentMode: x.group?.paymentMode === "split" ? "split" : "single",
-      members: Array.isArray(x.group?.members) ? x.group.members.map((m) => ({
-        displayName: String(m?.displayName || ""),
-        phone: String(m?.phone || ""),
-        // optional: if you later store link
-        customerId: String(m?.customerId || ""),
-      })) : [],
-    };
-  }
-
-  const full = String(x.displayName || safeName(x) || "").trim();
-  return {
-    kind: "profile",
-    displayName: full,
-    firstName: String(x.firstName || ""),
-    lastName: String(x.lastName || ""),
-    phone: String(x.phone || ""),
-    email: String(x.email || ""),
-    instagram: String(x.instagram || ""),
-    street: String(street || ""),
-    city: String(city || ""),
-    marketingConsent: !!x.marketingConsent,
-    note: String(x.note || ""),
-    groupTitle: "",
-    contactName: "",
-    groupPaymentMode: "single",
-    members: [],
-  };
-}
-
-function shortMeta(c) {
-  const phone = c?.phone ? String(c.phone) : "-";
-  const ig = c?.instagram ? `@${c.instagram}` : "-";
-  const lastStaff = c?.lastServedByStaffName || "-";
-  return `${phone} · ${ig} · last staff: ${lastStaff}`;
-}
-
-/** ---------- Component ---------- */
+/* ---------- Page ---------- */
 export default function CustomerAdminPage() {
   const nav = useNavigate();
 
-  const [all, setAll] = useState([]);
+  const [rows, setRows] = useState([]);
+  const [tab, setTab] = useState("customers"); // customers | groups
   const [q, setQ] = useState("");
 
-  // View/Edit modal
+  // view modal
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [history, setHistory] = useState([]);
+
+  // edit modal (same view modal, editable)
   const [editMode, setEditMode] = useState(false);
-  const [edit, setEdit] = useState(toEditFormFromCustomer(null));
 
-  // Create modal
+  // create modal
   const [createOpen, setCreateOpen] = useState(false);
-  const [createMode, setCreateMode] = useState("profile"); // profile | group
-  const [note, setNote] = useState("");
+  const [createMode, setCreateMode] = useState("profile"); // profile | wedding
 
+  const [note, setNote] = useState("");
   const [profile, setProfile] = useState({
     fullName: "",
     phone: "",
@@ -175,7 +95,7 @@ export default function CustomerAdminPage() {
     marketingConsent: false,
   });
 
-  const [group, setGroup] = useState({
+  const [wedding, setWedding] = useState({
     title: "Hochzeit",
     contactName: "",
     phone: "",
@@ -188,24 +108,16 @@ export default function CustomerAdminPage() {
 
   const [members, setMembers] = useState([{ displayName: "Braut", phone: "" }]);
 
-  // Quick profile creation from member (missing info dialog)
-  const [memberProfileOpen, setMemberProfileOpen] = useState(false);
-  const [memberDraft, setMemberDraft] = useState({
-    displayName: "",
-    phone: "",
-    email: "",
-    instagram: "",
-    street: "",
-    city: "",
-    marketingConsent: false,
-  });
-  const [memberOrigin, setMemberOrigin] = useState({ groupCustomerId: "", memberIndex: -1 });
+  // quick-create member profile modal
+  const [memberCreateOpen, setMemberCreateOpen] = useState(false);
+  const [memberDraft, setMemberDraft] = useState({ displayName: "", phone: "", email: "", instagram: "" });
 
   async function reload() {
-    const rowsRaw = await db.customers.toArray();
-    const rows = rowsRaw.map(safeCustomer).filter(Boolean);
-    rows.sort((a, b) => safeName(a).localeCompare(safeName(b)));
-    setAll(rows);
+    const arr = await db.customers.toArray().catch(() => []);
+    // sanitize nulls
+    const clean = arr.filter(Boolean);
+    clean.sort((a, b) => safeName(a).localeCompare(safeName(b)));
+    setRows(clean);
   }
 
   useEffect(() => {
@@ -213,36 +125,26 @@ export default function CustomerAdminPage() {
   }, []);
 
   const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return all;
+    const text = q.trim().toLowerCase();
+    const base = tab === "groups" ? rows.filter(isGroup) : rows.filter((c) => !isGroup(c));
 
-    return all.filter((c) => {
+    if (!text) return base;
+
+    return base.filter((c) => {
       const hay = [
         safeName(c),
-        c.displayName,
         c.phone,
         c.email,
         c.instagram,
         c.lastServedByStaffName,
-        c.kind,
+        c.group?.title,
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-
-      return hay.includes(s);
+      return hay.includes(text);
     });
-  }, [all, q]);
-
-  const customers = useMemo(
-    () => filtered.filter((c) => (c.kind || "profile") !== "group"),
-    [filtered]
-  );
-
-  const groups = useMemo(
-    () => filtered.filter((c) => (c.kind || "") === "group"),
-    [filtered]
-  );
+  }, [rows, q, tab]);
 
   async function openCustomer(c) {
     const x = safeCustomer(c);
@@ -250,21 +152,18 @@ export default function CustomerAdminPage() {
 
     setSelected(x);
     setEditMode(false);
-    setEdit(toEditFormFromCustomer(x));
 
     const rows = await db.customer_history
       .where("customerId")
       .equals(x.id)
       .toArray()
       .catch(async () => {
-        const allH = await db.customer_history.toArray();
-        return (allH || []).filter((h) => h && h.customerId === x.id);
+        const all = await db.customer_history.toArray().catch(() => []);
+        return all.filter((h) => h?.customerId === x.id);
       });
 
-    const clean = (rows || []).filter((r) => r && typeof r === "object");
-    clean.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-    setHistory(clean.slice(0, 120));
-
+    rows.sort((a, b) => (String(a.createdAt || "") < String(b.createdAt || "") ? 1 : -1));
+    setHistory(rows.slice(0, 120));
     setOpen(true);
   }
 
@@ -275,7 +174,6 @@ export default function CustomerAdminPage() {
     setEditMode(false);
   }
 
-  /** ---------- Create modal ---------- */
   function openCreate() {
     setCreateMode("profile");
     setNote("");
@@ -288,7 +186,7 @@ export default function CustomerAdminPage() {
       city: "",
       marketingConsent: false,
     });
-    setGroup({
+    setWedding({
       title: "Hochzeit",
       contactName: "",
       phone: "",
@@ -328,29 +226,29 @@ export default function CustomerAdminPage() {
       if (!isValidInstagramHandle(profile.instagram)) e.profileInstagram = "Bitte gültiger Instagram-Handle.";
     }
 
-    if (createMode === "group") {
-      const title = group.title.trim();
-      const contact = group.contactName.trim();
-      const phone = group.phone.trim();
-      if (title.length < 2) e.groupTitle = "Bitte mindestens 2 Zeichen.";
-      if (contact.length < 2) e.groupContact = "Bitte mindestens 2 Zeichen.";
-      if (onlyDigits(phone).length < 6) e.groupPhone = "Bitte gültige Telefonnummer (min. 6 Ziffern).";
-      if (!isValidEmail(group.email)) e.groupEmail = "Bitte gültige E-Mail.";
-
+    if (createMode === "wedding") {
+      const title = wedding.title.trim();
+      const contact = wedding.contactName.trim();
+      const phone = wedding.phone.trim();
+      if (title.length < 2) e.weddingTitle = "Bitte mindestens 2 Zeichen.";
+      if (contact.length < 2) e.weddingContact = "Bitte mindestens 2 Zeichen.";
+      if (onlyDigits(phone).length < 6) e.weddingPhone = "Bitte gültige Telefonnummer (min. 6 Ziffern).";
+      if (!isValidEmail(wedding.email)) e.weddingEmail = "Bitte gültige E-Mail.";
       if (!members.length) e.members = "Mindestens 1 Mitglied erforderlich.";
+
       members.forEach((m, idx) => {
-        if ((m.displayName || "").trim().length < 2) e[`memberName_${idx}`] = "Name: mindestens 2 Zeichen.";
+        if (String(m.displayName || "").trim().length < 2) e[`memberName_${idx}`] = "Name: mindestens 2 Zeichen.";
       });
     }
 
     return e;
-  }, [createMode, profile, group, members]);
+  }, [createMode, profile, wedding, members]);
 
   const createValid = useMemo(() => Object.keys(createErrors).length === 0, [createErrors]);
 
   async function saveNewCustomer() {
     if (!createValid) return;
-    const now = nowIso();
+    const now = new Date().toISOString();
 
     if (createMode === "profile") {
       const fullName = profile.fullName.trim();
@@ -370,10 +268,7 @@ export default function CustomerAdminPage() {
         lastServedByStaffId: "",
         lastServedByStaffName: "",
         displayName: fullName,
-        address: {
-          street: String(profile.street || "").trim(),
-          city: String(profile.city || "").trim(),
-        },
+        address: { street: String(profile.street || "").trim(), city: String(profile.city || "").trim() },
         note: String(note || "").trim(),
         kind: "profile",
       };
@@ -395,38 +290,31 @@ export default function CustomerAdminPage() {
       }
     }
 
-    if (createMode === "group") {
-      const title = group.title.trim();
-      const contact = group.contactName.trim();
-      const { firstName, lastName } = splitFullName(contact);
+    if (createMode === "wedding") {
+      const title = wedding.title.trim();
 
       const row = {
         id: crypto.randomUUID(),
         createdAt: now,
         updatedAt: now,
-        firstName,
-        lastName,
-        phone: onlyDigits(group.phone),
-        email: String(group.email || "").trim(),
+        ...splitFullName(wedding.contactName.trim()),
+        phone: onlyDigits(wedding.phone),
+        email: String(wedding.email || "").trim(),
         instagram: "",
-        marketingConsent: !!group.marketingConsent,
+        marketingConsent: !!wedding.marketingConsent,
         lastVisitAt: "",
         lastServedByStaffId: "",
         lastServedByStaffName: "",
         displayName: title,
-        address: {
-          street: String(group.street || "").trim(),
-          city: String(group.city || "").trim(),
-        },
+        address: { street: String(wedding.street || "").trim(), city: String(wedding.city || "").trim() },
         note: String(note || "").trim(),
         kind: "group",
         group: {
           title,
-          paymentMode: group.paymentMode === "split" ? "split" : "single",
+          paymentMode: wedding.paymentMode,
           members: members.map((m) => ({
             displayName: String(m.displayName || "").trim(),
             phone: onlyDigits(m.phone || ""),
-            customerId: "", // optional link to a profile
           })),
         },
       };
@@ -442,12 +330,7 @@ export default function CustomerAdminPage() {
         staffId: "",
         staffName: "",
         type: "group_created",
-        payload: {
-          title,
-          paymentMode: row.group.paymentMode,
-          membersCount: members.length,
-          note: String(note || "").trim(),
-        },
+        payload: { title, paymentMode: wedding.paymentMode, membersCount: members.length, note: String(note || "").trim() },
       });
     }
 
@@ -455,265 +338,130 @@ export default function CustomerAdminPage() {
     setCreateOpen(false);
   }
 
-  /** ---------- Edit / Delete ---------- */
-  function startEdit() {
-    if (!selected) return;
-    setEditMode(true);
-    setEdit(toEditFormFromCustomer(selected));
-  }
-
-  function cancelEdit() {
-    setEditMode(false);
-    setEdit(toEditFormFromCustomer(selected));
-  }
-
-  function editErrors() {
-    const e = {};
-    if (!editMode) return e;
-
-    if (edit.kind === "profile") {
-      const dn = String(edit.displayName || "").trim();
-      const phone = String(edit.phone || "").trim();
-
-      if (dn.length < 2) e.displayName = "Name: mindestens 2 Zeichen.";
-      if (onlyDigits(phone).length < 6) e.phone = "Telefon: min. 6 Ziffern.";
-      if (!isValidEmail(edit.email)) e.email = "Bitte gültige E-Mail.";
-      if (!isValidInstagramHandle(edit.instagram)) e.instagram = "Bitte gültiger Handle.";
-    } else {
-      const title = String(edit.groupTitle || edit.displayName || "").trim();
-      const contact = String(edit.contactName || "").trim();
-      const phone = String(edit.phone || "").trim();
-
-      if (title.length < 2) e.groupTitle = "Titel: mindestens 2 Zeichen.";
-      if (contact.length < 2) e.contactName = "Kontakt: mindestens 2 Zeichen.";
-      if (onlyDigits(phone).length < 6) e.phone = "Telefon: min. 6 Ziffern.";
-      if (!isValidEmail(edit.email)) e.email = "Bitte gültige E-Mail.";
-
-      const mem = Array.isArray(edit.members) ? edit.members : [];
-      if (mem.length === 0) e.members = "Mindestens 1 Mitglied erforderlich.";
-      mem.forEach((m, idx) => {
-        if (String(m.displayName || "").trim().length < 2) e[`m_${idx}`] = "Name: min. 2 Zeichen.";
-      });
-    }
-
-    return e;
-  }
-
-  const eErr = useMemo(editErrors, [edit, editMode]);
-
-  async function saveEdit() {
-    if (!selected) return;
-    if (Object.keys(eErr).length > 0) return;
-
-    const now = nowIso();
-
-    if (edit.kind === "profile") {
-      const dn = String(edit.displayName || "").trim();
-      const { firstName, lastName } = splitFullName(dn);
-
-      await db.customers.update(selected.id, {
-        updatedAt: now,
-        displayName: dn,
-        firstName,
-        lastName,
-        phone: onlyDigits(edit.phone),
-        email: String(edit.email || "").trim(),
-        instagram: normalizeInstagram(edit.instagram),
-        marketingConsent: !!edit.marketingConsent,
-        note: String(edit.note || "").trim(),
-        address: { street: String(edit.street || "").trim(), city: String(edit.city || "").trim() },
-      });
-    } else {
-      const title = String(edit.groupTitle || edit.displayName || "").trim();
-      const contact = String(edit.contactName || "").trim();
-      const { firstName, lastName } = splitFullName(contact);
-
-      await db.customers.update(selected.id, {
-        updatedAt: now,
-        displayName: title,
-        firstName,
-        lastName,
-        phone: onlyDigits(edit.phone),
-        email: String(edit.email || "").trim(),
-        marketingConsent: !!edit.marketingConsent,
-        note: String(edit.note || "").trim(),
-        address: { street: String(edit.street || "").trim(), city: String(edit.city || "").trim() },
-        group: {
-          title,
-          paymentMode: edit.groupPaymentMode === "split" ? "split" : "single",
-          members: (edit.members || []).map((m) => ({
-            displayName: String(m.displayName || "").trim(),
-            phone: onlyDigits(m.phone || ""),
-            customerId: String(m.customerId || ""),
-          })),
-        },
-      });
-    }
-
-    const refreshed = await db.customers.get(selected.id);
-    setSelected(refreshed);
-    setEditMode(false);
-    setEdit(toEditFormFromCustomer(refreshed));
-    await reload();
-  }
-
-  async function deleteSelected() {
-    if (!selected) return;
-    const name = selected.displayName || safeName(selected);
-    const ok = window.confirm(`Wirklich löschen?\n\n${name}\n\nDiese Aktion kann nicht rückgängig gemacht werden.`);
-    if (!ok) return;
-
-    // Delete customer + history
-    await db.customers.delete(selected.id);
-
-    const rows = await db.customer_history.where("customerId").equals(selected.id).toArray().catch(() => []);
-    await Promise.all((rows || []).map((r) => db.customer_history.delete(r.id)));
-
+  async function deleteCustomer(id) {
+    if (!id) return;
+    // optional: hier könntest du prüfen ob Visits existieren, sonst löschen
+    await db.customers.delete(id);
+    // history cleanup
+    const hist = await db.customer_history.where("customerId").equals(id).toArray().catch(() => []);
+    await Promise.all(hist.map((h) => db.customer_history.delete(h.id)));
     await reload();
     closeView();
   }
 
-  /** ---------- Member -> create profile (fast) ---------- */
-  async function createProfileFromMember(groupCustomerId, memberIndex) {
-    const grp = await db.customers.get(groupCustomerId);
-    if (!grp || grp.kind !== "group") return;
+  async function saveEdits() {
+    if (!selected?.id) return;
+    const now = new Date().toISOString();
 
-    const mem = grp.group?.members?.[memberIndex];
-    if (!mem) return;
+    // selected enthält bei groups: group + address etc.
+    const patch = {
+      ...selected,
+      updatedAt: now,
+      phone: onlyDigits(selected.phone || ""),
+      email: String(selected.email || "").trim(),
+      instagram: normalizeInstagram(selected.instagram || ""),
+    };
 
-    const displayName = String(mem.displayName || "").trim();
-    const phone = String(mem.phone || "").trim();
-
-    // If missing data -> open quick dialog
-    const missingPhone = onlyDigits(phone).length < 6;
-    const missingName = displayName.length < 2;
-
-    setMemberOrigin({ groupCustomerId, memberIndex });
-    setMemberDraft({
-      displayName,
-      phone: phone,
-      email: "",
-      instagram: "",
-      street: grp.address?.street || "",
-      city: grp.address?.city || "",
-      marketingConsent: !!grp.marketingConsent,
-    });
-
-    if (missingName || missingPhone) {
-      setMemberProfileOpen(true);
-      return;
-    }
-
-    await finalizeMemberProfileCreate({
-      displayName,
-      phone,
-      email: "",
-      instagram: "",
-      street: grp.address?.street || "",
-      city: grp.address?.city || "",
-      marketingConsent: !!grp.marketingConsent,
-    });
+    await db.customers.put(patch);
+    await reload();
+    setEditMode(false);
   }
 
-  async function finalizeMemberProfileCreate(draft) {
-    const dn = String(draft.displayName || "").trim();
-    const ph = onlyDigits(draft.phone);
-    if (dn.length < 2) return;
-    if (ph.length < 6) return;
-    if (!isValidEmail(draft.email)) return;
-    if (!isValidInstagramHandle(draft.instagram)) return;
+  function openMemberProfileCreate(m) {
+    const name = String(m?.displayName || "").trim();
+    setMemberDraft({
+      displayName: name,
+      phone: onlyDigits(m?.phone || ""),
+      email: "",
+      instagram: "",
+    });
+    setMemberCreateOpen(true);
+  }
 
-    const now = nowIso();
-    const { firstName, lastName } = splitFullName(dn);
+  function closeMemberProfileCreate() {
+    setMemberCreateOpen(false);
+  }
 
-    // Create customer profile
-    const newId = crypto.randomUUID();
-    await db.customers.put({
-      id: newId,
+  const memberCreateValid = useMemo(() => {
+    const nameOk = String(memberDraft.displayName || "").trim().length >= 2;
+    const phoneOk = onlyDigits(memberDraft.phone || "").length >= 6; // du wolltest schnell + sicher
+    const emailOk = isValidEmail(memberDraft.email);
+    const instaOk = isValidInstagramHandle(memberDraft.instagram);
+    return nameOk && phoneOk && emailOk && instaOk;
+  }, [memberDraft]);
+
+  async function createProfileFromMember() {
+    if (!memberCreateValid) return;
+    const now = new Date().toISOString();
+    const fullName = String(memberDraft.displayName || "").trim();
+    const { firstName, lastName } = splitFullName(fullName);
+
+    const row = {
+      id: crypto.randomUUID(),
       createdAt: now,
       updatedAt: now,
       firstName,
       lastName,
-      phone: ph,
-      email: String(draft.email || "").trim(),
-      instagram: normalizeInstagram(draft.instagram),
-      marketingConsent: !!draft.marketingConsent,
+      phone: onlyDigits(memberDraft.phone || ""),
+      email: String(memberDraft.email || "").trim(),
+      instagram: normalizeInstagram(memberDraft.instagram),
+      marketingConsent: 0,
       lastVisitAt: "",
       lastServedByStaffId: "",
       lastServedByStaffName: "",
-      displayName: dn,
-      address: { street: String(draft.street || "").trim(), city: String(draft.city || "").trim() },
+      displayName: fullName,
+      address: { street: "", city: "" },
       note: "",
       kind: "profile",
+    };
+
+    await db.customers.put(row);
+    await db.customer_history.add({
+      id: crypto.randomUUID(),
+      customerId: row.id,
+      createdAt: now,
+      visitId: "",
+      areaId: "",
+      staffId: "",
+      staffName: "",
+      type: "profile_created_from_group_member",
+      payload: { fromGroupId: selected?.id || "" },
     });
 
-    // Link back into group member (customerId)
-    const { groupCustomerId, memberIndex } = memberOrigin;
-    if (groupCustomerId && memberIndex >= 0) {
-      const grp = await db.customers.get(groupCustomerId);
-      if (grp && grp.kind === "group" && Array.isArray(grp.group?.members)) {
-        const nextMembers = grp.group.members.map((m, idx) =>
-          idx === memberIndex
-            ? { ...m, customerId: newId, displayName: dn, phone: ph }
-            : m
-        );
-
-        await db.customers.update(groupCustomerId, {
-          updatedAt: now,
-          group: {
-            ...grp.group,
-            members: nextMembers,
-          },
-        });
-
-        const refreshed = await db.customers.get(groupCustomerId);
-        if (selected?.id === groupCustomerId) {
-          setSelected(refreshed);
-          setEdit(toEditFormFromCustomer(refreshed));
-        }
-      }
-    }
-
-    setMemberProfileOpen(false);
-    setMemberOrigin({ groupCustomerId: "", memberIndex: -1 });
+    setMemberCreateOpen(false);
     await reload();
   }
 
-  const memberDraftErrors = useMemo(() => {
-    if (!memberProfileOpen) return {};
-    const e = {};
-    const dn = String(memberDraft.displayName || "").trim();
-    const ph = onlyDigits(memberDraft.phone);
-
-    if (dn.length < 2) e.displayName = "Name: mindestens 2 Zeichen.";
-    if (ph.length < 6) e.phone = "Telefon: min. 6 Ziffern.";
-    if (!isValidEmail(memberDraft.email)) e.email = "Bitte gültige E-Mail.";
-    if (!isValidInstagramHandle(memberDraft.instagram)) e.instagram = "Bitte gültiger Handle.";
-
-    return e;
-  }, [memberDraft, memberProfileOpen]);
-
-  const memberDraftValid = useMemo(() => Object.keys(memberDraftErrors).length === 0, [memberDraftErrors]);
-
-  /** ---------- UI ---------- */
   return (
     <AdminShell
       title="Kunden"
-      subtitle="Kunden und Gruppen getrennt. Admin kann bearbeiten/löschen. Gruppen: Mitgliederverwaltung + optional Profile."
+      subtitle="Kunden & Gruppen getrennt, Details bearbeitbar, Gruppen-Mitglieder optional als eigene Profile."
       right={
         <div className={styles.rightTools}>
-          <button className={styles.backBtn} type="button" onClick={() => nav("/admin")} aria-label="Zurück zum Admin-Menü">
-            <span className={styles.backIcon}>←</span>
-            <span>Admin</span>
-          </button>
-
           <div className={styles.searchBox}>
             <input
-              className={styles.search}
-              placeholder="Suche: Name, Telefon, Instagram, E-Mail…"
+              className={styles.input}
+              placeholder={tab === "groups" ? "Suche Gruppen…" : "Suche Kunden…"}
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
+          </div>
+
+          <div className={styles.tabs}>
+            <button
+              type="button"
+              className={`${styles.tabBtn} ${tab === "customers" ? styles.tabBtnActive : ""}`}
+              onClick={() => setTab("customers")}
+            >
+              Kunden
+            </button>
+            <button
+              type="button"
+              className={`${styles.tabBtn} ${tab === "groups" ? styles.tabBtnActive : ""}`}
+              onClick={() => setTab("groups")}
+            >
+              Gruppen
+            </button>
           </div>
 
           <button className={styles.primaryBtn} type="button" onClick={openCreate}>
@@ -723,14 +471,19 @@ export default function CustomerAdminPage() {
       }
     >
       <div className={styles.wrap}>
-        {/* LEFT: Kunden */}
         <div className={styles.card}>
-          <div className={styles.headRow}>
+          <div className={styles.headerRow}>
             <div>
-              <div className={styles.hTitle}>Kunden</div>
-              <div className={styles.hSub}>Einzelprofile (Standard).</div>
+              <h2 className={styles.title}>{tab === "groups" ? "Gruppen" : "Kunden"}</h2>
+              <p className={styles.sub}>
+                Klick auf eine Zeile öffnet Details. In Details kannst du bearbeiten und löschen.
+              </p>
             </div>
-            <div className={styles.chip}>{customers.length}</div>
+
+            {/* WICHTIG: Zurück-Button (du willst überall) */}
+            <button type="button" className={styles.backBtn} onClick={() => nav("/admin")} aria-label="Zurück">
+              ← Admin
+            </button>
           </div>
 
           <div className={styles.tableWrap}>
@@ -738,23 +491,31 @@ export default function CustomerAdminPage() {
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Kontakt</th>
+                  <th>Telefon</th>
+                  <th>E-Mail</th>
+                  <th>Instagram</th>
+                  <th>Letzter Staff</th>
                   <th className={styles.right}>Aktion</th>
                 </tr>
               </thead>
               <tbody>
-                {customers.length === 0 ? (
+                {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className={styles.muted}>Keine Kunden gefunden.</td>
+                    <td colSpan={6} className={styles.muted}>
+                      Keine Treffer.
+                    </td>
                   </tr>
                 ) : (
-                  customers.map((c) => (
+                  filtered.map((c) => (
                     <tr key={c.id} className={styles.row} onClick={() => openCustomer(c)}>
                       <td className={styles.nameCell}>{safeName(c)}</td>
-                      <td className={styles.metaCell}>{shortMeta(c)}</td>
+                      <td>{c.phone || "-"}</td>
+                      <td className={styles.muted}>{c.email || "-"}</td>
+                      <td className={styles.muted}>{c.instagram || "-"}</td>
+                      <td className={styles.muted}>{c.lastServedByStaffName || "-"}</td>
                       <td className={styles.right} onClick={(e) => e.stopPropagation()}>
-                        <button className={styles.ghostBtn} type="button" onClick={() => openCustomer(c)}>
-                          Öffnen
+                        <button className={styles.dangerBtn} onClick={() => deleteCustomer(c.id)} type="button">
+                          Löschen
                         </button>
                       </td>
                     </tr>
@@ -763,392 +524,214 @@ export default function CustomerAdminPage() {
               </tbody>
             </table>
 
-            <div className={styles.hint}>Klick auf Zeile → Profil bearbeiten/löschen + Historie.</div>
-          </div>
-        </div>
-
-        {/* RIGHT: Gruppen */}
-        <div className={styles.card}>
-          <div className={styles.headRow}>
-            <div>
-              <div className={styles.hTitle}>Gruppen</div>
-              <div className={styles.hSub}>Hochzeiten / Gruppenprofile.</div>
+            <div className={styles.hint}>
+              Tipp: Gruppen öffnen → Mitglieder → “Profil erstellen” erzeugt optional ein echtes Kundenprofil.
             </div>
-            <div className={styles.chip}>{groups.length}</div>
-          </div>
-
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Titel</th>
-                  <th>Kontakt</th>
-                  <th className={styles.right}>Aktion</th>
-                </tr>
-              </thead>
-              <tbody>
-                {groups.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className={styles.muted}>Keine Gruppen gefunden.</td>
-                  </tr>
-                ) : (
-                  groups.map((g) => (
-                    <tr key={g.id} className={styles.row} onClick={() => openCustomer(g)}>
-                      <td className={styles.nameCell}>{String(g.displayName || g.group?.title || "Gruppe")}</td>
-                      <td className={styles.metaCell}>
-                        {safeName(g)} · {g.phone || "-"} · {g.group?.members?.length ?? 0} Mitglieder
-                      </td>
-                      <td className={styles.right} onClick={(e) => e.stopPropagation()}>
-                        <button className={styles.ghostBtn} type="button" onClick={() => openCustomer(g)}>
-                          Öffnen
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-
-            <div className={styles.hint}>Gruppen: Mitglieder verwalten + optional Profile pro Mitglied erstellen.</div>
           </div>
         </div>
       </div>
 
-      {/* VIEW / EDIT MODAL */}
+      {/* DETAILS MODAL */}
       <Modal
         open={open}
-        title={
-          selected
-            ? (selected.kind === "group" ? "Gruppe: " : "Kunde: ") + (selected.displayName || safeName(selected))
-            : ""
-        }
+        title={selected ? (isGroup(selected) ? `Gruppe: ${safeName(selected)}` : `Kunde: ${safeName(selected)}`) : "Details"}
         onClose={closeView}
         footer={
           <div className={styles.modalFooter}>
-            {!editMode ? (
-              <>
-                <button className={styles.secondaryBtn} type="button" onClick={closeView}>Schließen</button>
-                <button className={styles.dangerBtn} type="button" onClick={deleteSelected}>Löschen</button>
-                <button className={styles.primaryBtn} type="button" onClick={startEdit}>Bearbeiten</button>
-              </>
+            <button className={styles.ghostBtn} onClick={closeView} type="button">
+              Schließen
+            </button>
+            <button className={styles.dangerBtn} onClick={() => deleteCustomer(selected?.id)} type="button">
+              Löschen
+            </button>
+            {editMode ? (
+              <button className={styles.primaryBtn} onClick={saveEdits} type="button">
+                Speichern
+              </button>
             ) : (
-              <>
-                <button className={styles.secondaryBtn} type="button" onClick={cancelEdit}>Abbrechen</button>
-                <button className={styles.primaryBtn} type="button" onClick={saveEdit} disabled={Object.keys(eErr).length > 0}>
-                  Speichern
-                </button>
-              </>
+              <button className={styles.secondaryBtn} onClick={() => setEditMode(true)} type="button">
+                Bearbeiten
+              </button>
             )}
           </div>
         }
       >
-        <div className={styles.modalBody}>
-          <div className={styles.modalGrid}>
-            {/* Left panel: Profile fields */}
-            <div className={styles.panel}>
-              <div className={styles.panelTitle}>Stammdaten</div>
+        <div className={styles.modalGrid}>
+          <div className={styles.panel}>
+            <div className={styles.panelTitle}>Stammdaten</div>
 
-              {!editMode ? (
-                <div className={styles.kv}>
-                  <div className={styles.k}>Typ</div>
-                  <div className={styles.v}>{selected?.kind === "group" ? "Gruppe" : "Kunde"}</div>
+            <Field label={isGroup(selected) ? "Titel" : "Name"}>
+              <input
+                className={styles.fieldInput}
+                value={selected?.displayName || ""}
+                disabled={!editMode}
+                onChange={(e) => setSelected((p) => ({ ...p, displayName: e.target.value }))}
+              />
+            </Field>
 
-                  <div className={styles.k}>Name/Titel</div>
-                  <div className={styles.v}>{selected?.displayName || safeName(selected)}</div>
+            {isGroup(selected) ? (
+              <Field label="Kontakt Name">
+                <input
+                  className={styles.fieldInput}
+                  value={`${selected?.firstName || ""} ${selected?.lastName || ""}`.trim()}
+                  disabled={!editMode}
+                  onChange={(e) => {
+                    const { firstName, lastName } = splitFullName(e.target.value);
+                    setSelected((p) => ({ ...p, firstName, lastName }));
+                  }}
+                />
+              </Field>
+            ) : (
+              <Field label="Vorname / Nachname">
+                <input
+                  className={styles.fieldInput}
+                  value={`${selected?.firstName || ""} ${selected?.lastName || ""}`.trim()}
+                  disabled={!editMode}
+                  onChange={(e) => {
+                    const { firstName, lastName } = splitFullName(e.target.value);
+                    setSelected((p) => ({ ...p, firstName, lastName, displayName: e.target.value }));
+                  }}
+                />
+              </Field>
+            )}
 
-                  <div className={styles.k}>Telefon</div>
-                  <div className={styles.v}>{selected?.phone || "-"}</div>
+            <div className={styles.twoCol}>
+              <Field label="Telefon">
+                <input
+                  className={styles.fieldInput}
+                  value={selected?.phone || ""}
+                  disabled={!editMode}
+                  onChange={(e) => setSelected((p) => ({ ...p, phone: onlyDigits(e.target.value) }))}
+                />
+              </Field>
 
-                  <div className={styles.k}>E-Mail</div>
-                  <div className={styles.v}>{selected?.email || "-"}</div>
-
-                  <div className={styles.k}>Instagram</div>
-                  <div className={styles.v}>{selected?.instagram ? `@${selected.instagram}` : "-"}</div>
-
-                  <div className={styles.k}>Marketing</div>
-                  <div className={styles.v}>{selected?.marketingConsent ? "ja" : "nein"}</div>
-
-                  <div className={styles.k}>Adresse</div>
-                  <div className={styles.v}>
-                    {(selected?.address?.street || "-")} · {(selected?.address?.city || "-")}
-                  </div>
-
-                  <div className={styles.k}>Notiz</div>
-                  <div className={styles.v}>{selected?.note || "-"}</div>
-
-                  <div className={styles.k}>Erstellt</div>
-                  <div className={styles.v}>{fmtDateTime(selected?.createdAt)}</div>
-
-                  <div className={styles.k}>Letzter Staff</div>
-                  <div className={styles.v}>{selected?.lastServedByStaffName || "-"}</div>
-                </div>
-              ) : (
-                <>
-                  {edit.kind === "profile" ? (
-                    <div className={styles.formGrid}>
-                      <Field styles={styles} label="Name *" error={eErr.displayName}>
-                        <input
-                          className={styles.input}
-                          value={edit.displayName}
-                          onChange={(e) => setEdit((p) => ({ ...p, displayName: e.target.value }))}
-                        />
-                      </Field>
-
-                      <Field styles={styles} label="Telefon *" error={eErr.phone} hint="Nur Zahlen">
-                        <input
-                          className={styles.input}
-                          value={edit.phone}
-                          onChange={(e) => setEdit((p) => ({ ...p, phone: onlyDigits(e.target.value) }))}
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                        />
-                      </Field>
-
-                      <Field styles={styles} label="E-Mail" error={eErr.email}>
-                        <input
-                          className={styles.input}
-                          type="email"
-                          value={edit.email}
-                          onChange={(e) => setEdit((p) => ({ ...p, email: e.target.value }))}
-                        />
-                      </Field>
-
-                      <Field styles={styles} label="Instagram" error={eErr.instagram}>
-                        <input
-                          className={styles.input}
-                          value={edit.instagram}
-                          onChange={(e) => setEdit((p) => ({ ...p, instagram: normalizeInstagram(e.target.value) }))}
-                        />
-                      </Field>
-
-                      <Field styles={styles} label="Straße">
-                        <input
-                          className={styles.input}
-                          value={edit.street}
-                          onChange={(e) => setEdit((p) => ({ ...p, street: e.target.value }))}
-                        />
-                      </Field>
-
-                      <Field styles={styles} label="Stadt">
-                        <input
-                          className={styles.input}
-                          value={edit.city}
-                          onChange={(e) => setEdit((p) => ({ ...p, city: e.target.value }))}
-                        />
-                      </Field>
-
-                      <Field styles={styles} label="Notiz">
-                        <input
-                          className={styles.input}
-                          value={edit.note}
-                          onChange={(e) => setEdit((p) => ({ ...p, note: e.target.value }))}
-                        />
-                      </Field>
-
-                      <label className={styles.checkRow}>
-                        <input
-                          type="checkbox"
-                          checked={!!edit.marketingConsent}
-                          onChange={(e) => setEdit((p) => ({ ...p, marketingConsent: e.target.checked }))}
-                        />
-                        <span>Marketing-Einverständnis</span>
-                      </label>
-                    </div>
-                  ) : (
-                    <div className={styles.formGrid}>
-                      <Field styles={styles} label="Titel *" error={eErr.groupTitle}>
-                        <input
-                          className={styles.input}
-                          value={edit.groupTitle}
-                          onChange={(e) => setEdit((p) => ({ ...p, groupTitle: e.target.value, displayName: e.target.value }))}
-                        />
-                      </Field>
-
-                      <Field styles={styles} label="Kontakt Name *" error={eErr.contactName}>
-                        <input
-                          className={styles.input}
-                          value={edit.contactName}
-                          onChange={(e) => setEdit((p) => ({ ...p, contactName: e.target.value }))}
-                        />
-                      </Field>
-
-                      <Field styles={styles} label="Telefon *" error={eErr.phone} hint="Nur Zahlen">
-                        <input
-                          className={styles.input}
-                          value={edit.phone}
-                          onChange={(e) => setEdit((p) => ({ ...p, phone: onlyDigits(e.target.value) }))}
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                        />
-                      </Field>
-
-                      <Field styles={styles} label="E-Mail" error={eErr.email}>
-                        <input
-                          className={styles.input}
-                          type="email"
-                          value={edit.email}
-                          onChange={(e) => setEdit((p) => ({ ...p, email: e.target.value }))}
-                        />
-                      </Field>
-
-                      <Field styles={styles} label="Straße">
-                        <input
-                          className={styles.input}
-                          value={edit.street}
-                          onChange={(e) => setEdit((p) => ({ ...p, street: e.target.value }))}
-                        />
-                      </Field>
-
-                      <Field styles={styles} label="Stadt">
-                        <input
-                          className={styles.input}
-                          value={edit.city}
-                          onChange={(e) => setEdit((p) => ({ ...p, city: e.target.value }))}
-                        />
-                      </Field>
-
-                      <Field styles={styles} label="Notiz">
-                        <input
-                          className={styles.input}
-                          value={edit.note}
-                          onChange={(e) => setEdit((p) => ({ ...p, note: e.target.value }))}
-                        />
-                      </Field>
-
-                      <div className={styles.payRow}>
-                        <span className={styles.payLabel}>Zahlung</span>
-                        <button
-                          type="button"
-                          className={`${styles.pillSm} ${edit.groupPaymentMode === "single" ? styles.pillSmActive : ""}`}
-                          onClick={() => setEdit((p) => ({ ...p, groupPaymentMode: "single" }))}
-                        >
-                          zusammen
-                        </button>
-                        <button
-                          type="button"
-                          className={`${styles.pillSm} ${edit.groupPaymentMode === "split" ? styles.pillSmActive : ""}`}
-                          onClick={() => setEdit((p) => ({ ...p, groupPaymentMode: "split" }))}
-                        >
-                          separat
-                        </button>
-                      </div>
-
-                      <label className={styles.checkRow}>
-                        <input
-                          type="checkbox"
-                          checked={!!edit.marketingConsent}
-                          onChange={(e) => setEdit((p) => ({ ...p, marketingConsent: e.target.checked }))}
-                        />
-                        <span>Marketing-Einverständnis (Kontakt)</span>
-                      </label>
-
-                      <div className={styles.members}>
-                        <div className={styles.membersHead}>
-                          <b>Mitglieder *</b>
-                          <button className={styles.btnSmall} type="button" onClick={() => setEdit((p) => ({
-                            ...p,
-                            members: [...(p.members || []), { displayName: "", phone: "", customerId: "" }]
-                          }))}>
-                            + Mitglied
-                          </button>
-                        </div>
-
-                        {eErr.members ? <div className={styles.error}>{eErr.members}</div> : null}
-
-                        {(edit.members || []).map((m, i) => (
-                          <div key={i} className={styles.memberRow}>
-                            <div className={styles.memberCol}>
-                              <input
-                                className={styles.input}
-                                value={m.displayName}
-                                placeholder={i === 0 ? "Hauptperson" : "Name"}
-                                onChange={(e) => setEdit((p) => ({
-                                  ...p,
-                                  members: p.members.map((x, idx) => idx === i ? { ...x, displayName: e.target.value } : x)
-                                }))}
-                              />
-                              {eErr[`m_${i}`] ? <div className={styles.error}>{eErr[`m_${i}`]}</div> : null}
-                            </div>
-
-                            <input
-                              className={styles.input}
-                              value={m.phone}
-                              placeholder="Telefon (optional)"
-                              onChange={(e) => setEdit((p) => ({
-                                ...p,
-                                members: p.members.map((x, idx) => idx === i ? { ...x, phone: onlyDigits(e.target.value) } : x)
-                              }))}
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                            />
-
-                            <div className={styles.memberActions}>
-                              {String(m.customerId || "") ? (
-                                <span className={styles.linkChip}>Profil verknüpft</span>
-                              ) : (
-                                <button
-                                  className={styles.ghostBtn}
-                                  type="button"
-                                  onClick={() => createProfileFromMember(selected.id, i)}
-                                  title="Optional ein eigenes Kundenprofil aus diesem Mitglied erstellen"
-                                >
-                                  Profil erstellen
-                                </button>
-                              )}
-
-                              {i > 0 ? (
-                                <button
-                                  className={styles.dangerBtn}
-                                  type="button"
-                                  onClick={() => setEdit((p) => ({
-                                    ...p,
-                                    members: p.members.filter((_, idx) => idx !== i)
-                                  }))}
-                                >
-                                  Entfernen
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {!editMode && selected?.kind === "group" ? (
-                <div className={styles.groupInfo}>
-                  <div className={styles.groupInfoTitle}>Mitglieder</div>
-                  <div className={styles.groupInfoSub}>
-                    Zum Bearbeiten: „Bearbeiten“ → Mitglieder anpassen / löschen / Profil erstellen.
-                  </div>
-                </div>
-              ) : null}
+              <Field label="E-Mail">
+                <input
+                  className={styles.fieldInput}
+                  value={selected?.email || ""}
+                  disabled={!editMode}
+                  onChange={(e) => setSelected((p) => ({ ...p, email: e.target.value }))}
+                />
+              </Field>
             </div>
 
-            {/* Right panel: History */}
-            <div className={styles.panel}>
-              <div className={styles.panelTitle}>Historie</div>
-              <div className={styles.panelSub}>Bis zu 120 letzte Einträge.</div>
+            <Field label="Instagram">
+              <input
+                className={styles.fieldInput}
+                value={selected?.instagram || ""}
+                disabled={!editMode}
+                onChange={(e) => setSelected((p) => ({ ...p, instagram: normalizeInstagram(e.target.value) }))}
+              />
+            </Field>
 
-              <div className={styles.hist}>
-                {history.length === 0 ? (
-                  <div className={styles.muted}>Keine Historie vorhanden.</div>
-                ) : (
-                  history.map((h) => (
-                    <div key={h.id} className={styles.histRow}>
-                      <div className={styles.histTop}>
-                        <div className={styles.histType}>{h.type || "event"}</div>
-                        <div className={styles.histTime}>{fmtDateTime(h.createdAt)}</div>
-                      </div>
-                      <div className={styles.histMeta}>
-                        area: {h.areaId || "-"} · staff: {h.staffName || "-"}
+            <Field label="Notiz">
+              <input
+                className={styles.fieldInput}
+                value={selected?.note || ""}
+                disabled={!editMode}
+                onChange={(e) => setSelected((p) => ({ ...p, note: e.target.value }))}
+              />
+            </Field>
+
+            {isGroup(selected) ? (
+              <div className={styles.groupBox}>
+                <div className={styles.groupHead}>
+                  <div>
+                    <div className={styles.groupTitle}>Mitglieder</div>
+                    <div className={styles.groupSub}>Buttons sind immer sichtbar (Profil erstellen / Entfernen).</div>
+                  </div>
+                </div>
+
+                <div className={styles.memberList}>
+                  {(selected?.group?.members || []).map((m, idx) => (
+                    <div key={idx} className={styles.memberRow}>
+                      <input
+                        className={styles.memberInput}
+                        value={String(m.displayName || "")}
+                        disabled={!editMode}
+                        placeholder="Name"
+                        onChange={(e) => {
+                          const next = [...(selected.group.members || [])];
+                          next[idx] = { ...next[idx], displayName: e.target.value };
+                          setSelected((p) => ({ ...p, group: { ...p.group, members: next } }));
+                        }}
+                      />
+                      <input
+                        className={styles.memberInput}
+                        value={String(m.phone || "")}
+                        disabled={!editMode}
+                        placeholder="Telefon"
+                        onChange={(e) => {
+                          const next = [...(selected.group.members || [])];
+                          next[idx] = { ...next[idx], phone: onlyDigits(e.target.value) };
+                          setSelected((p) => ({ ...p, group: { ...p.group, members: next } }));
+                        }}
+                      />
+
+                      <div className={styles.memberActions}>
+                        <button
+                          type="button"
+                          className={styles.memberBtn}
+                          onClick={() => openMemberProfileCreate(m)}
+                          title="Aus Mitglied Kundenprofil erstellen"
+                        >
+                          Profil erstellen
+                        </button>
+
+                        {editMode ? (
+                          <button
+                            type="button"
+                            className={styles.memberDanger}
+                            onClick={() => {
+                              const next = [...(selected.group.members || [])].filter((_, i) => i !== idx);
+                              setSelected((p) => ({ ...p, group: { ...p.group, members: next } }));
+                            }}
+                            title="Mitglied entfernen"
+                          >
+                            Entfernen
+                          </button>
+                        ) : null}
                       </div>
                     </div>
-                  ))
-                )}
+                  ))}
+                </div>
+
+                {editMode ? (
+                  <button
+                    type="button"
+                    className={styles.addMemberBtn}
+                    onClick={() => {
+                      const next = [...(selected.group.members || []), { displayName: "", phone: "" }];
+                      setSelected((p) => ({ ...p, group: { ...p.group, members: next } }));
+                    }}
+                  >
+                    + Mitglied hinzufügen
+                  </button>
+                ) : null}
               </div>
+            ) : null}
+          </div>
+
+          <div className={styles.panel}>
+            <div className={styles.panelTitle}>Historie</div>
+            <div className={styles.panelSub}>Bis zu 120 letzte Einträge.</div>
+
+            <div className={styles.hist}>
+              {history.length === 0 ? (
+                <div className={styles.empty}>Keine Historie vorhanden.</div>
+              ) : (
+                history.map((h) => (
+                  <div key={h.id} className={styles.histRow}>
+                    <div className={styles.histTop}>
+                      <div className={styles.histTitle}>{h.type || "event"}</div>
+                      <div className={styles.histTime}>{fmtDateTime(h.createdAt)}</div>
+                    </div>
+                    <div className={styles.histMeta}>
+                      area: {h.areaId || "-"} · staff: {h.staffName || "-"}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -1161,7 +744,7 @@ export default function CustomerAdminPage() {
         onClose={closeCreate}
         footer={
           <div className={styles.modalFooter}>
-            <button className={styles.secondaryBtn} type="button" onClick={closeCreate}>
+            <button className={styles.ghostBtn} type="button" onClick={closeCreate}>
               Abbrechen
             </button>
             <button className={styles.primaryBtn} type="button" onClick={saveNewCustomer} disabled={!createValid}>
@@ -1170,12 +753,12 @@ export default function CustomerAdminPage() {
           </div>
         }
       >
-        <div className={styles.createTabs} role="tablist" aria-label="Typ">
+        <div className={styles.createTabs} role="tablist" aria-label="Kundentyp">
           <button
             type="button"
             role="tab"
             aria-selected={createMode === "profile"}
-            className={`${styles.tabBtn} ${createMode === "profile" ? styles.tabBtnActive : ""}`}
+            className={`${styles.tabBtn2} ${createMode === "profile" ? styles.tabBtn2Active : ""}`}
             onClick={() => setCreateMode("profile")}
           >
             Kunde
@@ -1183,9 +766,9 @@ export default function CustomerAdminPage() {
           <button
             type="button"
             role="tab"
-            aria-selected={createMode === "group"}
-            className={`${styles.tabBtn} ${createMode === "group" ? styles.tabBtnActive : ""}`}
-            onClick={() => setCreateMode("group")}
+            aria-selected={createMode === "wedding"}
+            className={`${styles.tabBtn2} ${createMode === "wedding" ? styles.tabBtn2Active : ""}`}
+            onClick={() => setCreateMode("wedding")}
           >
             Hochzeit / Gruppe
           </button>
@@ -1193,18 +776,18 @@ export default function CustomerAdminPage() {
 
         {createMode === "profile" ? (
           <div className={styles.formGrid}>
-            <Field styles={styles} label="Name *" error={createErrors.profileFullName}>
+            <Field label="Name *" error={createErrors.profileFullName}>
               <input
-                className={styles.input}
+                className={styles.fieldInput}
                 value={profile.fullName}
                 onChange={(e) => setProfile((p) => ({ ...p, fullName: e.target.value }))}
                 placeholder="Vor- und Nachname"
               />
             </Field>
 
-            <Field styles={styles} label="Telefon *" hint="Nur Zahlen." error={createErrors.profilePhone}>
+            <Field label="Telefon *" hint="Nur Zahlen" error={createErrors.profilePhone}>
               <input
-                className={styles.input}
+                className={styles.fieldInput}
                 value={profile.phone}
                 onChange={(e) => setProfile((p) => ({ ...p, phone: onlyDigits(e.target.value) }))}
                 inputMode="numeric"
@@ -1213,29 +796,41 @@ export default function CustomerAdminPage() {
               />
             </Field>
 
-            <Field styles={styles} label="E-Mail (optional)" error={createErrors.profileEmail}>
+            <Field label="E-Mail (optional)" error={createErrors.profileEmail}>
               <input
-                className={styles.input}
+                className={styles.fieldInput}
                 type="email"
                 value={profile.email}
                 onChange={(e) => setProfile((p) => ({ ...p, email: e.target.value }))}
+                placeholder="name@domain.de"
               />
             </Field>
 
-            <Field styles={styles} label="Instagram (optional)" hint="Handle" error={createErrors.profileInstagram}>
+            <Field label="Instagram (optional)" hint="Handle" error={createErrors.profileInstagram}>
               <input
-                className={styles.input}
+                className={styles.fieldInput}
                 value={profile.instagram}
                 onChange={(e) => setProfile((p) => ({ ...p, instagram: normalizeInstagram(e.target.value) }))}
+                placeholder="z. B. salon.system"
               />
             </Field>
 
-            <Field styles={styles} label="Straße (optional)">
-              <input className={styles.input} value={profile.street} onChange={(e) => setProfile((p) => ({ ...p, street: e.target.value }))} />
+            <Field label="Straße (optional)">
+              <input
+                className={styles.fieldInput}
+                value={profile.street}
+                onChange={(e) => setProfile((p) => ({ ...p, street: e.target.value }))}
+                placeholder="Straße, Hausnummer"
+              />
             </Field>
 
-            <Field styles={styles} label="Stadt (optional)">
-              <input className={styles.input} value={profile.city} onChange={(e) => setProfile((p) => ({ ...p, city: e.target.value }))} />
+            <Field label="Stadt (optional)">
+              <input
+                className={styles.fieldInput}
+                value={profile.city}
+                onChange={(e) => setProfile((p) => ({ ...p, city: e.target.value }))}
+                placeholder="Stadt"
+              />
             </Field>
 
             <label className={styles.checkRow}>
@@ -1246,55 +841,70 @@ export default function CustomerAdminPage() {
               />
               <span>Marketing-Einverständnis</span>
             </label>
+
+            <Field label="Notiz (optional)">
+              <input
+                className={styles.fieldInput}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="z. B. Allergie, Wunsch…"
+              />
+            </Field>
           </div>
         ) : (
           <div className={styles.formGrid}>
-            <Field styles={styles} label="Titel *" error={createErrors.groupTitle}>
-              <input className={styles.input} value={group.title} onChange={(e) => setGroup((w) => ({ ...w, title: e.target.value }))} />
+            <Field label="Titel * (z. B. Hochzeit Anna)" error={createErrors.weddingTitle}>
+              <input className={styles.fieldInput} value={wedding.title} onChange={(e) => setWedding((w) => ({ ...w, title: e.target.value }))} />
             </Field>
 
-            <Field styles={styles} label="Kontakt Name *" error={createErrors.groupContact}>
-              <input className={styles.input} value={group.contactName} onChange={(e) => setGroup((w) => ({ ...w, contactName: e.target.value }))} />
+            <Field label="Kontakt Name *" error={createErrors.weddingContact}>
+              <input className={styles.fieldInput} value={wedding.contactName} onChange={(e) => setWedding((w) => ({ ...w, contactName: e.target.value }))} />
             </Field>
 
-            <Field styles={styles} label="Telefon *" hint="Nur Zahlen." error={createErrors.groupPhone}>
-              <input className={styles.input} value={group.phone} onChange={(e) => setGroup((w) => ({ ...w, phone: onlyDigits(e.target.value) }))} inputMode="numeric" pattern="[0-9]*" />
+            <Field label="Telefon *" hint="Nur Zahlen" error={createErrors.weddingPhone}>
+              <input
+                className={styles.fieldInput}
+                value={wedding.phone}
+                onChange={(e) => setWedding((w) => ({ ...w, phone: onlyDigits(e.target.value) }))}
+                inputMode="numeric"
+                pattern="[0-9]*"
+              />
             </Field>
 
-            <Field styles={styles} label="E-Mail (optional)" error={createErrors.groupEmail}>
-              <input className={styles.input} type="email" value={group.email} onChange={(e) => setGroup((w) => ({ ...w, email: e.target.value }))} />
+            <Field label="E-Mail (optional)" error={createErrors.weddingEmail}>
+              <input className={styles.fieldInput} type="email" value={wedding.email} onChange={(e) => setWedding((w) => ({ ...w, email: e.target.value }))} />
             </Field>
 
-            <Field styles={styles} label="Straße (optional)">
-              <input className={styles.input} value={group.street} onChange={(e) => setGroup((w) => ({ ...w, street: e.target.value }))} />
+            <Field label="Straße (optional)">
+              <input className={styles.fieldInput} value={wedding.street} onChange={(e) => setWedding((w) => ({ ...w, street: e.target.value }))} />
             </Field>
 
-            <Field styles={styles} label="Stadt (optional)">
-              <input className={styles.input} value={group.city} onChange={(e) => setGroup((w) => ({ ...w, city: e.target.value }))} />
+            <Field label="Stadt (optional)">
+              <input className={styles.fieldInput} value={wedding.city} onChange={(e) => setWedding((w) => ({ ...w, city: e.target.value }))} />
             </Field>
 
             <div className={styles.payRow}>
               <span className={styles.payLabel}>Zahlung</span>
               <button
-                className={`${styles.pillSm} ${group.paymentMode === "single" ? styles.pillSmActive : ""}`}
-                onClick={() => setGroup((w) => ({ ...w, paymentMode: "single" }))}
+                className={`${styles.pillSm} ${wedding.paymentMode === "single" ? styles.pillSmActive : ""}`}
+                onClick={() => setWedding((w) => ({ ...w, paymentMode: "single" }))}
                 type="button"
               >
                 zusammen
               </button>
               <button
-                className={`${styles.pillSm} ${group.paymentMode === "split" ? styles.pillSmActive : ""}`}
-                onClick={() => setGroup((w) => ({ ...w, paymentMode: "split" }))}
+                className={`${styles.pillSm} ${wedding.paymentMode === "split" ? styles.pillSmActive : ""}`}
+                onClick={() => setWedding((w) => ({ ...w, paymentMode: "split" }))}
                 type="button"
               >
                 separat
               </button>
             </div>
 
-            <div className={styles.members}>
+            <div className={styles.membersBox}>
               <div className={styles.membersHead}>
                 <b>Mitglieder *</b>
-                <button className={styles.btnSmall} onClick={addMember} type="button">
+                <button className={styles.smallBtn} onClick={addMember} type="button">
                   + Mitglied
                 </button>
               </div>
@@ -1302,10 +912,10 @@ export default function CustomerAdminPage() {
               {createErrors.members ? <div className={styles.error}>{createErrors.members}</div> : null}
 
               {members.map((m, i) => (
-                <div key={i} className={styles.memberRow}>
+                <div key={i} className={styles.memberRowCreate}>
                   <div className={styles.memberCol}>
                     <input
-                      className={styles.input}
+                      className={styles.fieldInput}
                       value={m.displayName}
                       placeholder={i === 0 ? "Braut / Hauptperson" : "Name"}
                       onChange={(e) => updateMember(i, { displayName: e.target.value })}
@@ -1314,7 +924,7 @@ export default function CustomerAdminPage() {
                   </div>
 
                   <input
-                    className={styles.input}
+                    className={styles.fieldInput}
                     value={m.phone}
                     placeholder="Telefon (optional)"
                     onChange={(e) => updateMember(i, { phone: onlyDigits(e.target.value) })}
@@ -1322,11 +932,18 @@ export default function CustomerAdminPage() {
                     pattern="[0-9]*"
                   />
 
-                  {i > 0 ? (
-                    <button className={styles.dangerBtn} onClick={() => removeMember(i)} type="button">
-                      Entfernen
+                  <div className={styles.memberActionsCreate}>
+                    <button type="button" className={styles.memberBtn} onClick={() => openMemberProfileCreate(m)}>
+                      Profil erstellen
                     </button>
-                  ) : null}
+                    {i > 0 ? (
+                      <button className={styles.memberDanger} onClick={() => removeMember(i)} type="button">
+                        Entfernen
+                      </button>
+                    ) : (
+                      <div className={styles.memberSpacer} />
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1334,114 +951,77 @@ export default function CustomerAdminPage() {
             <label className={styles.checkRow}>
               <input
                 type="checkbox"
-                checked={!!group.marketingConsent}
-                onChange={(e) => setGroup((w) => ({ ...w, marketingConsent: e.target.checked }))}
+                checked={!!wedding.marketingConsent}
+                onChange={(e) => setWedding((w) => ({ ...w, marketingConsent: e.target.checked }))}
               />
               <span>Marketing-Einverständnis (Kontakt)</span>
             </label>
+
+            <Field label="Notiz (optional)">
+              <input className={styles.fieldInput} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Hinweis…" />
+            </Field>
           </div>
         )}
-
-        <div className={styles.noteRow}>
-          <Field styles={styles} label="Notiz / Kommentar (optional)">
-            <input className={styles.input} value={note} onChange={(e) => setNote(e.target.value)} placeholder="z. B. Allergie, Wunsch, Hinweis…" />
-          </Field>
-        </div>
       </Modal>
 
-      {/* QUICK MEMBER PROFILE MODAL */}
+      {/* MEMBER QUICK PROFILE MODAL */}
       <Modal
-        open={memberProfileOpen}
+        open={memberCreateOpen}
         title="Profil aus Mitglied erstellen"
-        onClose={() => setMemberProfileOpen(false)}
+        onClose={closeMemberProfileCreate}
         footer={
           <div className={styles.modalFooter}>
-            <button className={styles.secondaryBtn} type="button" onClick={() => setMemberProfileOpen(false)}>
+            <button className={styles.ghostBtn} type="button" onClick={closeMemberProfileCreate}>
               Abbrechen
             </button>
-            <button
-              className={styles.primaryBtn}
-              type="button"
-              onClick={() => finalizeMemberProfileCreate(memberDraft)}
-              disabled={!memberDraftValid}
-            >
+            <button className={styles.primaryBtn} type="button" onClick={createProfileFromMember} disabled={!memberCreateValid}>
               Profil erstellen
             </button>
           </div>
         }
       >
-        <div className={styles.quickNote}>
-          Fehlende Daten ergänzen – danach wird das Profil sofort erstellt und automatisch in der Gruppe verknüpft.
-        </div>
-
         <div className={styles.formGrid}>
-          <Field styles={styles} label="Name *" error={memberDraftErrors.displayName}>
+          <Field label="Name *">
             <input
-              className={styles.input}
+              className={styles.fieldInput}
               value={memberDraft.displayName}
               onChange={(e) => setMemberDraft((p) => ({ ...p, displayName: e.target.value }))}
             />
           </Field>
-
-          <Field styles={styles} label="Telefon *" error={memberDraftErrors.phone} hint="Nur Zahlen">
+          <Field label="Telefon *">
             <input
-              className={styles.input}
+              className={styles.fieldInput}
               value={memberDraft.phone}
               onChange={(e) => setMemberDraft((p) => ({ ...p, phone: onlyDigits(e.target.value) }))}
-              inputMode="numeric"
-              pattern="[0-9]*"
             />
           </Field>
-
-          <Field styles={styles} label="E-Mail (optional)" error={memberDraftErrors.email}>
+          <Field label="E-Mail (optional)">
             <input
-              className={styles.input}
-              type="email"
+              className={styles.fieldInput}
               value={memberDraft.email}
               onChange={(e) => setMemberDraft((p) => ({ ...p, email: e.target.value }))}
             />
           </Field>
-
-          <Field styles={styles} label="Instagram (optional)" error={memberDraftErrors.instagram}>
+          <Field label="Instagram (optional)">
             <input
-              className={styles.input}
+              className={styles.fieldInput}
               value={memberDraft.instagram}
               onChange={(e) => setMemberDraft((p) => ({ ...p, instagram: normalizeInstagram(e.target.value) }))}
             />
           </Field>
-
-          <Field styles={styles} label="Straße (optional)">
-            <input
-              className={styles.input}
-              value={memberDraft.street}
-              onChange={(e) => setMemberDraft((p) => ({ ...p, street: e.target.value }))}
-            />
-          </Field>
-
-          <Field styles={styles} label="Stadt (optional)">
-            <input
-              className={styles.input}
-              value={memberDraft.city}
-              onChange={(e) => setMemberDraft((p) => ({ ...p, city: e.target.value }))}
-            />
-          </Field>
-
-          <label className={styles.checkRow}>
-            <input
-              type="checkbox"
-              checked={!!memberDraft.marketingConsent}
-              onChange={(e) => setMemberDraft((p) => ({ ...p, marketingConsent: e.target.checked }))}
-            />
-            <span>Marketing-Einverständnis</span>
-          </label>
+          {!memberCreateValid ? (
+            <div className={styles.inlineWarn}>
+              Name min. 2 Zeichen, Telefon min. 6 Ziffern. E-Mail/Instagram optional aber wenn gefüllt → gültig.
+            </div>
+          ) : null}
         </div>
       </Modal>
     </AdminShell>
   );
 }
 
-/** ---------- Reusable Field ---------- */
-function Field({ styles, label, hint, error, children }) {
+/* ---------- Small reusable field ---------- */
+function Field({ label, hint, error, children }) {
   return (
     <label className={styles.field}>
       <span className={styles.labelRow}>

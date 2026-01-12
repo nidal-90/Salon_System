@@ -7,7 +7,6 @@ import { receptionRoutes } from "../../features/reception/reception.routes.jsx";
 import { staffRoutes } from "../../features/staff/staff.routes.jsx";
 import { adminRoutes } from "../../features/admin/admin.routes.jsx";
 
-// Kiosk
 import KioskOrderPage from "../../features/kiosk/pages/KioskOrderPage.jsx";
 
 function renderRouteList(list) {
