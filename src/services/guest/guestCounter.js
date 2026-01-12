@@ -9,7 +9,7 @@ function todayKey() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export async function getNextGuestDisplayName() {
+export async function nextGuestDisplayName() {
   const today = todayKey();
   const savedDate = localStorage.getItem(DATE_KEY);
 
@@ -22,5 +22,5 @@ export async function getNextGuestDisplayName() {
   const next = cur + 1;
   localStorage.setItem(COUNT_KEY, String(next));
 
-  return `Gast #${next}`;
+  return `Gast ${next}`;
 }

@@ -1,0 +1,81 @@
+/* src/components/common/Sidebar.module.css */
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  background: rgba(255,255,255,0.06);
+  border-right: 1px solid rgba(255,255,255,0.10);
+  backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+}
+
+.brand {
+  padding: 16px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.title {
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+
+.meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.10);
+}
+
+.user {
+  margin-top: 8px;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.nav {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+}
+
+.link {
+  padding: 10px 10px;
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.link:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.08);
+}
+
+.active {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.14);
+}
+
+.footer {
+  margin-top: auto;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  opacity: 0.8;
+}
+
+.hint {
+  font-size: 12px;
+}

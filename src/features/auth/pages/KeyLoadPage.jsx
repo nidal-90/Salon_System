@@ -1,6 +1,8 @@
+// src/features/auth/pages/KeyLoadPage.jsx
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import useUsbSession from "../../../hooks/useUsbSession.js";
+import { parseKeyFileJson } from "../../../services/usb/usbSession.js";
 import styles from "./KeyLoadPage.module.css";
 
 export default function KeyLoadPage() {
@@ -11,25 +13,36 @@ export default function KeyLoadPage() {
 
   async function onPick(e) {
     setErr("");
+    setInfo(null);
+
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
       const text = await file.text();
-      const json = JSON.parse(text);
-      setInfo(json);
-      await usb.loadKeyFromFile(new File([text], file.name, { type: file.type }));
+
+      // Robust parse + Normalisierung (admin/cashier/staff + legacy)
+      const session = parseKeyFileJson(text);
+
+      // Hook schreibt in localStorage + aktualisiert State
+      usb.setSession(session);
+
+      setInfo(session);
     } catch (ex) {
-      setErr("Key konnte nicht gelesen werden. Bitte JSON prüfen.");
+      console.error("Key load failed:", ex);
+      setErr(ex?.message || "Key konnte nicht gelesen werden. Bitte JSON prüfen.");
     }
   }
 
   function go() {
     const role = usb.role;
-    if (role === "cashier") nav("/cashier");
+    if (role === "cashier") nav("/reception"); // oder "/cashier" je nach neuer Struktur
     else if (role === "admin") nav("/admin");
-    else nav("/staff");
+    else if (role === "staff") nav("/staff");
+    else nav("/start");
   }
+
+  const canContinue = usb.role && usb.role !== "guest";
 
   return (
     <div className={styles.wrap}>
@@ -38,16 +51,25 @@ export default function KeyLoadPage() {
         <p className={styles.sub}>Lade die Key-Datei (.json). Danach werden Rechte gesetzt.</p>
 
         <div className={styles.box}>
-          <input className={styles.file} type="file" accept=".json,application/json" onChange={onPick} />
+          <input
+            className={styles.file}
+            type="file"
+            accept=".json,.txt,application/json"
+            onChange={onPick}
+          />
           <div className={styles.hint}>Unterstützt .json Dateien (z. B. vom USB-Stick).</div>
         </div>
 
-        {info && (
-          <div className={styles.preview}>
-            <div><span>Rolle:</span><b>{usb.role || info.role}</b></div>
-            <div><span>User:</span><b>{usb.staffName || info.staffName || "-"}</b></div>
+        <div className={styles.preview}>
+          <div>
+            <span>Rolle:</span>
+            <b>{usb.role || info?.role || "guest"}</b>
           </div>
-        )}
+          <div>
+            <span>User:</span>
+            <b>{usb.staffName || info?.staffName || "-"}</b>
+          </div>
+        </div>
 
         {err && <div className={styles.error}>{err}</div>}
 
@@ -55,7 +77,7 @@ export default function KeyLoadPage() {
           <button className={styles.secondary} onClick={() => nav("/start")} type="button">
             Zurück
           </button>
-          <button className={styles.primary} onClick={go} disabled={!usb.role} type="button">
+          <button className={styles.primary} onClick={go} disabled={!canContinue} type="button">
             Weiter
           </button>
         </div>

@@ -1,29 +1,20 @@
 /* src/app/layout/AppShell.module.css */
 .shell {
-  min-height: 100dvh;
-  padding: clamp(10px, 2vw, 22px);
+  min-height: 100vh;
 }
 
-.top {
-  position: sticky;
-  top: 12px;              /* etwas harmonischer */
-  z-index: 30;
-  margin: 0 auto 14px auto;
-  max-width: 1180px;
+.app {
+  display: flex;
+  min-height: 100vh;
 }
 
 .main {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding-top: 6px;       /* kleine Entkopplung vom sticky */
+  flex: 1;
+  min-width: 0;
+  padding: 18px;
 }
 
-.mainKiosk {
-  max-width: 920px;
-  margin: 0 auto;
-}
-
-@media (max-width: 520px) {
-  .shell { padding: 10px; }
-  .top { top: 8px; margin-bottom: 10px; }
+.kioskMain {
+  min-height: 100vh;
+  padding: 18px;
 }

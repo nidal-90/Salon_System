@@ -1,30 +1,50 @@
 // src/services/usb/usbSession.js
-import { ROLES } from "../../app/config/constants";
+import { Roles } from "../../app/config/roles.js";
 
-const STORAGE_KEY = "sibel_session_v1";
+const STORAGE_KEY = "sibel:usbSession:v1";
 
 /**
- * Erwartetes Keyfile JSON:
- * { "role": "cash" | "staff", "staffId": "...", "name": "..." }
- * - cash: cashierId = staffId (oder eigene id)
- * - staff: staffId muss gesetzt sein
+ * Keyfile JSON – unterstützt alt + neu:
+ * Neu empfohlen:
+ *  { "role": "admin"|"cashier"|"staff", "staffId": "...", "staffName": "..." }
+ *
+ * Legacy:
+ *  { "role": "cash", "staffId": "...", "name": "..." }
  */
 export function parseKeyFileJson(text) {
-  const data = JSON.parse(text);
-  const role = data?.role;
-
-  if (role !== ROLES.CASH && role !== ROLES.STAFF) {
-    throw new Error("Ungültige Rolle im Keyfile.");
+  let data;
+  try {
+    // BOM entfernen falls vorhanden
+    const cleaned = String(text || "").replace(/^\uFEFF/, "").trim();
+    data = JSON.parse(cleaned);
+  } catch {
+    throw new Error("Keyfile ist kein gültiges JSON.");
   }
 
-  if (!data.staffId) {
-    throw new Error("Keyfile muss staffId enthalten.");
+  let role = String(data?.role || "").trim().toLowerCase();
+
+  // Legacy mapping
+  if (role === "cash") role = Roles.CASHIER;
+  if (role === "administrator") role = Roles.ADMIN;
+
+  const allowed = [Roles.STAFF, Roles.CASHIER, Roles.ADMIN];
+  if (!allowed.includes(role)) {
+    throw new Error(`Ungültige Rolle im Keyfile: "${role}"`);
+  }
+
+  const staffId = data?.staffId != null ? String(data.staffId).trim() : "";
+  const staffName =
+    String(data?.staffName || data?.name || "").trim();
+
+  // staff/cashier: staffId empfohlen (kannst du zwingend machen)
+  if ((role === Roles.STAFF || role === Roles.CASHIER) && !staffId) {
+    throw new Error("Keyfile muss staffId enthalten (für staff/cashier).");
   }
 
   return {
     role,
-    staffId: String(data.staffId),
-    name: String(data.name || ""),
+    staffId: staffId || null,
+    staffName: staffName || null,
     loadedAt: new Date().toISOString(),
   };
 }
@@ -38,53 +58,44 @@ export function readSession() {
   }
 }
 
-/**
- * Speichert die Session (z.B. nach Key-Import).
- */
 export function writeSession(session) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
   return session;
-}
-
-/**
- * Hilfsfunktion: TRUE wenn Session vorhanden und nicht abgelaufen (optional).
- */
-export function isSessionActive(session = readSession()) {
-  if (!session) return false;
-  // Optional: Ablaufzeit prüfen, wenn du expiresAt nutzt
-  if (session.expiresAt && Date.now() > Number(session.expiresAt)) return false;
-  return true;
-}
-
-export function getSession() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { role: ROLES.GUEST };
-    const s = JSON.parse(raw);
-    if (!s?.role) return { role: ROLES.GUEST };
-    return s;
-  } catch {
-    return { role: ROLES.GUEST };
-  }
-}
-
-
-export function setSession(session) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
 }
 
 export function clearSession() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-export function isCash(session) {
-  return session?.role === ROLES.CASH;
+export function isSessionActive(session = readSession()) {
+  if (!session) return false;
+  if (session.expiresAt && Date.now() > Number(session.expiresAt)) return false;
+  return true;
+}
+
+export function getSession() {
+  const s = readSession();
+  if (!s?.role) return { role: Roles.GUEST };
+  return s;
+}
+
+export function hasCashAccess(session) {
+  const r = session?.role;
+  return r === Roles.CASHIER || r === Roles.ADMIN;
 }
 
 export function isStaff(session) {
-  return session?.role === ROLES.STAFF;
+  return session?.role === Roles.STAFF;
+}
+
+export function isCashier(session) {
+  return session?.role === Roles.CASHIER;
+}
+
+export function isAdmin(session) {
+  return session?.role === Roles.ADMIN;
 }
 
 export function isGuest(session) {
-  return !session?.role || session?.role === ROLES.GUEST;
+  return !session?.role || session?.role === Roles.GUEST;
 }

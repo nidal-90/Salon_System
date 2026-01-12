@@ -1,6 +1,12 @@
 // src/db/schema.js
 export const DB_NAME = "sibel_salon_system";
-export const DB_VERSION = 2;
+
+/**
+ * v1 war minimal
+ * v2 ist dein aktuelles Schema
+ * v3: Gutscheine/Coupons (vouchers) hinzugefügt
+ */
+export const DB_VERSION = 3;
 
 export const schemaV2 = {
   areas: `
@@ -224,5 +230,33 @@ export const schemaV2 = {
     note,
     [monthKey+staffId],
     [staffId+dateKey]
+  `,
+};
+
+/**
+ * v3 erweitert v2 um vouchers.
+ * WICHTIG: code ist indexiert, status+createdAt sind hilfreich fürs UI.
+ * Hinweis: Dexie "unique" wird über & im schema gesetzt.
+ */
+export const schemaV3 = {
+  ...schemaV2,
+
+  vouchers: `
+    id,
+    &code,
+    status,
+    amount,
+    currency,
+    customerId,
+    createdAt,
+    createdByStaffId,
+    createdByStaffName,
+    redeemedAt,
+    redeemedByStaffId,
+    redeemedByStaffName,
+    redeemedVisitId,
+    note,
+    [status+createdAt],
+    [customerId+createdAt]
   `,
 };

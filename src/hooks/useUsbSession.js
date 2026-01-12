@@ -1,9 +1,11 @@
+// src/hooks/useUsbSession.js
 import { useEffect, useMemo, useState } from "react";
-import { clearSession, readSession, writeSession } from "../services/usb/usbSession.js";
+import { clearSession, readSession, writeSession, parseKeyFileJson } from "../services/usb/usbSession.js";
 import { Roles } from "../app/config/roles.js";
 
 function normalizeSession(s) {
-  if (!s) return { usbPresent: false, role: null, staffId: null, staffName: null };
+  if (!s) return { usbPresent: false, role: Roles.GUEST, staffId: null, staffName: null };
+
   return {
     usbPresent: true,
     role: s.role || Roles.STAFF,
@@ -21,24 +23,25 @@ export default function useUsbSession() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  const api = useMemo(() => {
-    return {
+  return useMemo(
+    () => ({
       ...session,
-      async loadKeyFromFile(file) {
+      setSession: (next) => {
+        writeSession(next);
+        setSession(normalizeSession(readSession()));
+      },
+      loadKeyFromFile: async (file) => {
         const text = await file.text();
-        const json = JSON.parse(text);
-
-        // expected: { role: "cashier"|"staff"|"admin", staffId, staffName }
-        writeSession(json);
-        setSession(normalizeSession(json));
+        const next = parseKeyFileJson(text);
+        writeSession(next);
+        setSession(normalizeSession(readSession()));
+        return next;
       },
-      lock() {
+      clear: () => {
         clearSession();
-        setSession(normalizeSession(null));
+        setSession(normalizeSession(readSession()));
       },
-      // “Login once per day” tracking will be stored as staff_events later
-    };
-  }, [session]);
-
-  return api;
+    }),
+    [session]
+  );
 }

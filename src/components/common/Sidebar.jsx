@@ -1,6 +1,6 @@
 // src/components/common/TopBar.jsx
 import useUsbSession from "../../hooks/useUsbSession.js";
-import styles from "./TopBar.module.css";
+import styles from "./SideBar.module.css";
  
 export default function TopBar({ onHome, onReception, onStaff, onCashier, onAdmin }) {
   const { role, staffName, usbPresent, lock } = useUsbSession();

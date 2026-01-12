@@ -1,7 +1,7 @@
 // src/db/index.js
 import Dexie from "dexie";
-import { DB_NAME, DB_VERSION, schemaV2 } from "./schema.js";
-import { upgradeToV2 } from "./migrations.js";
+import { DB_NAME, DB_VERSION, schemaV2, schemaV3 } from "./schema.js";
+import { upgradeToV2, upgradeToV3 } from "./migrations.js";
 import { seedIfEmpty } from "./seeds.js";
 
 export const db = new Dexie(DB_NAME);
@@ -13,8 +13,13 @@ db.version(1).stores({
 });
 
 // v2 aktuelles Schema + Upgrade
-db.version(DB_VERSION).stores(schemaV2).upgrade(async (tx) => {
+db.version(2).stores(schemaV2).upgrade(async (tx) => {
   await upgradeToV2(tx);
+});
+
+// v3: vouchers hinzugefügt + Upgrade
+db.version(DB_VERSION).stores(schemaV3).upgrade(async (tx) => {
+  await upgradeToV3(tx);
 });
 
 export async function openDb() {

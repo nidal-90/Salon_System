@@ -66,7 +66,7 @@ export async function upgradeToV2(tx) {
     if (!r.note) r.note = "";
   });
 
-  // sanitize catalogs (optional, aber sinnvoll)
+  // sanitize catalogs
   await tx.table("product_catalog").toCollection().modify((p) => {
     p.active = normalizeActive(p.active);
     p.price = asMoney(p.price ?? 0);
@@ -79,5 +79,24 @@ export async function upgradeToV2(tx) {
     s.price = asMoney(s.price ?? 0);
     if (!s.category) s.category = "Allgemein";
     if (s.sortOrder == null) s.sortOrder = 9999;
+  });
+}
+
+/**
+ * v3: Gutscheine (vouchers) sind neu.
+ * Es gibt keine Alt-Daten, aber wir normieren falls du bereits testweise Einträge hattest.
+ */
+export async function upgradeToV3(tx) {
+  const table = tx.table("vouchers");
+
+  // Wenn es die Tabelle frisch gibt, ist sie leer. Trotzdem robust:
+  await table.toCollection().modify((v) => {
+    if (!v.id) v.id = crypto.randomUUID();
+    v.code = String(v.code || "").trim();
+    v.status = v.status === "redeemed" || v.status === "void" ? v.status : "active";
+    v.amount = asMoney(v.amount ?? 0);
+    v.currency = String(v.currency || "EUR").toUpperCase();
+    if (!v.createdAt) v.createdAt = new Date().toISOString();
+    if (!v.note) v.note = "";
   });
 }

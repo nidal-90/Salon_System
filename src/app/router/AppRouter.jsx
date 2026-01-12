@@ -1,3 +1,4 @@
+// src/app/router/AppRouter.jsx
 import AppRoutes from "./routes.jsx";
 import styles from "./AppRouter.module.css";
 
