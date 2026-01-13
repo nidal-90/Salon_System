@@ -1,13 +1,32 @@
 /* src/features/admin/pages/VoucherAdminPage.module.css */
 /* Premium graphite – no blue */
 
-.rightTools{
+/* NEW: top tools container like Customers (left home / right tools) */
+.topTools{
+  width: 100%;
   display:flex;
-  gap:10px;
   align-items:center;
-  flex-wrap:wrap;
+  justify-content: space-between; /* key */
+  gap: 12px;
 }
 
+.topLeft{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex: 0 0 auto;
+}
+
+.topRight{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:10px;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+}
+
+/* keep existing */
 .backBtn{
   display:inline-flex;
   align-items:center;
@@ -20,6 +39,7 @@
   color:#fff;
   font-weight:900;
   cursor:pointer;
+  white-space: nowrap;
 }
 .backBtn:hover{ background: rgba(0,0,0,.92); }
 .backIcon{ font-size:16px; line-height:1; opacity:.95; }
@@ -58,6 +78,7 @@
   color:#fff;
   font-weight:900;
   cursor:pointer;
+  white-space: nowrap;
 }
 .primaryBtn:hover{ background: rgba(0,0,0,.95); }
 

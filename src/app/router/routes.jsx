@@ -5,7 +5,7 @@ import AppShell from "../layout/AppShell.jsx";
 import { startRoutes } from "../../features/start/start.routes.jsx";
 import { receptionRoutes } from "../../features/reception/reception.routes.jsx";
 import { staffRoutes } from "../../features/staff/staff.routes.jsx";
-import { adminRoutes } from "../../features/admin/admin.routes.jsx";
+import { adminRoutes } from "../../features/admin/admin.routes.jsx"; // ✅ genau so
 
 import KioskOrderPage from "../../features/kiosk/pages/KioskOrderPage.jsx";
 
@@ -18,7 +18,7 @@ export default function AppRoutes() {
     ...startRoutes(),
     ...receptionRoutes(),
     ...staffRoutes(),
-    ...adminRoutes(),
+    ...adminRoutes(), // ✅ genau so
     { path: "/order", element: <KioskOrderPage /> },
   ];
 
