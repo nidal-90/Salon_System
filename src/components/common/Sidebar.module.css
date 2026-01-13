@@ -1,81 +1,78 @@
-/* src/components/common/Sidebar.module.css */
-.sidebar {
-  width: 240px;
-  min-width: 240px;
-  height: 100vh;
-  position: sticky;
-  top: 0;
-  background: rgba(255,255,255,0.06);
-  border-right: 1px solid rgba(255,255,255,0.10);
-  backdrop-filter: blur(10px);
+.drawer {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(12px);
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  overflow-x: hidden;
+  transition: width 0.25s ease;
+  position: relative !important; /* 🔴 مهم */
+}
+
+/* العرض يتغير – بدون overlay */
+.open .drawer {
+  width: 16rem !important;
+}
+
+.closed .drawer {
+  width: 4.5rem !important;
+}
+
+.spacer {
+  height: 4rem;
+}
+
+.item {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding-inline: 0.75rem;
 }
 
-.brand {
-  padding: 16px 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-}
-
-.title {
-  font-weight: 700;
-  letter-spacing: .2px;
-}
-
-.meta {
+.icon {
+  min-width: 2.5rem;
   display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
 }
 
-.badge {
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.10);
+.textShow {
+  opacity: 1;
+  white-space: nowrap;
+  transition: opacity 0.2s ease;
 }
 
-.user {
-  margin-top: 8px;
-  font-size: 13px;
-  opacity: 0.9;
+.textHide {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
 }
 
-.nav {
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  overflow: auto;
+.sessionBox {
+  padding: 1rem;
+  font-size: 0.75rem;
+  color: gray;
 }
 
-.link {
-  padding: 10px 10px;
-  border-radius: 12px;
-  text-decoration: none;
-  color: inherit;
-  background: transparent;
-  border: 1px solid transparent;
+.menuBtn {
+  position: fixed !important;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 1400;
+  background: white !important;
+  box-shadow: 0 0.25rem 0.75rem rgba(0,0,0,0.15);
 }
 
-.link:hover {
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(255,255,255,0.08);
+.mobileDrawer {
+  width: 15rem;
+}
+.grow {
+  flex-grow: 1;
 }
 
-.active {
-  background: rgba(255,255,255,0.12);
-  border-color: rgba(255,255,255,0.14);
+.logoutBox {
+  margin-bottom: 0.5rem;
 }
 
-.footer {
-  margin-top: auto;
-  padding: 12px 14px;
-  border-top: 1px solid rgba(255,255,255,0.08);
-  opacity: 0.8;
-}
-
-.hint {
-  font-size: 12px;
+.activeItem {
+  background: rgba(0, 0, 0, 0.08) !important;
+  font-weight: 600;
 }

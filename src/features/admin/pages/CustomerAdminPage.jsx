@@ -245,10 +245,29 @@ export default function CustomerAdminPage() {
   }, [createMode, profile, wedding, members]);
 
   const createValid = useMemo(() => Object.keys(createErrors).length === 0, [createErrors]);
-
   async function saveNewCustomer() {
     if (!createValid) return;
     const now = new Date().toISOString();
+
+    // --- Prepare data for duplicate check ---
+    const phoneToCheck = onlyDigits(createMode === "profile" ? profile.phone : wedding.phone);
+    const emailToCheck = String(createMode === "profile" ? profile.email : wedding.email).trim().toLowerCase();
+
+    // --- Check for duplicates in DB ---
+    const existing = await db.customers
+      .filter(c => {
+        const phoneMatch = onlyDigits(c.phone) === phoneToCheck;
+        const emailMatch =
+          emailToCheck && (c.email || "").trim().toLowerCase() === emailToCheck; // فقط لو فيه إيميل
+        return phoneMatch || emailMatch;
+      })
+      .toArray()
+      .catch(() => []);
+
+    if (existing.length > 0) {
+      alert("Kunde mit dieser Telefonnummer oder E-Mail existiert bereits.");
+      return;
+    }
 
     if (createMode === "profile") {
       const fullName = profile.fullName.trim();
@@ -260,8 +279,8 @@ export default function CustomerAdminPage() {
         updatedAt: now,
         firstName,
         lastName,
-        phone: onlyDigits(profile.phone),
-        email: String(profile.email || "").trim(),
+        phone: phoneToCheck,
+        email: emailToCheck,
         instagram: normalizeInstagram(profile.instagram),
         marketingConsent: !!profile.marketingConsent,
         lastVisitAt: "",
@@ -298,8 +317,8 @@ export default function CustomerAdminPage() {
         createdAt: now,
         updatedAt: now,
         ...splitFullName(wedding.contactName.trim()),
-        phone: onlyDigits(wedding.phone),
-        email: String(wedding.email || "").trim(),
+        phone: phoneToCheck,
+        email: emailToCheck,
         instagram: "",
         marketingConsent: !!wedding.marketingConsent,
         lastVisitAt: "",
@@ -337,6 +356,8 @@ export default function CustomerAdminPage() {
     await reload();
     setCreateOpen(false);
   }
+
+
 
   async function deleteCustomer(id) {
     if (!id) return;
