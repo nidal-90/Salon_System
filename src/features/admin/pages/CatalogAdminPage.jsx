@@ -9,11 +9,6 @@ function pad2(n) {
   return String(x).padStart(2, "0");
 }
 
-function money(n) {
-  const x = Number(n || 0);
-  return Number.isFinite(x) ? x.toFixed(2) : "0.00";
-}
-
 async function nextFreeDisplayNo(tableName) {
   const rows = await db.table(tableName).toArray();
   const used = new Set(rows.map((r) => Number(r.displayNo || 0)).filter((x) => x > 0));
@@ -22,30 +17,46 @@ async function nextFreeDisplayNo(tableName) {
   return n;
 }
 
+function Switch({ value, onToggle }) {
+  return (
+    <label className={styles.switch}>
+      <input type="checkbox" checked={!!value} onChange={onToggle} />
+      <span />
+    </label>
+  );
+}
+
 export default function CatalogAdminPage() {
-    const navigate = useNavigate();
+  const nav = useNavigate();
+
+  // Tabs
+  const [topTab, setTopTab] = useState("treatments"); // treatments | products
+  const [subTabTreat, setSubTabTreat] = useState("areas"); // areas | treatments
+  const [subTabProd, setSubTabProd] = useState("categories"); // categories | products
+
+  const [q, setQ] = useState("");
+
   // Data
   const [areas, setAreas] = useState([]);
-  const [serviceRows, setServiceRows] = useState([]);
-  const [productCategories, setProductCategories] = useState([]);
-  const [productRows, setProductRows] = useState([]);
+  const [treatments, setTreatments] = useState([]); // service_catalog
+  const [categories, setCategories] = useState([]);
+  const [products, setProducts] = useState([]);
 
-  // Create: Area
+  // Selected filter
+  const [selectedAreaId, setSelectedAreaId] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+
+  // Create forms
   const [areaName, setAreaName] = useState("");
   const [areaActive, setAreaActive] = useState(true);
 
-  // Create: Service
-  const [svcAreaId, setSvcAreaId] = useState("");
-  const [svcName, setSvcName] = useState("");
-  const [svcPrice, setSvcPrice] = useState(0);
-  const [svcActive, setSvcActive] = useState(true);
+  const [treatName, setTreatName] = useState("");
+  const [treatPrice, setTreatPrice] = useState(0);
+  const [treatActive, setTreatActive] = useState(true);
 
-  // Create: Product Category
   const [catName, setCatName] = useState("");
   const [catActive, setCatActive] = useState(true);
 
-  // Create: Product
-  const [prodCategoryId, setProdCategoryId] = useState("");
   const [prodName, setProdName] = useState("");
   const [prodPrice, setProdPrice] = useState(0);
   const [prodActive, setProdActive] = useState(true);
@@ -58,25 +69,38 @@ export default function CatalogAdminPage() {
       db.product_catalog.toArray(),
     ]);
 
-    // Sort by displayNo then name
-    a.sort((x, y) => (Number(x.displayNo || 9999) - Number(y.displayNo || 9999)) || String(x.name || "").localeCompare(String(y.name || "")));
-    c.sort((x, y) => (Number(x.displayNo || 9999) - Number(y.displayNo || 9999)) || String(x.title || "").localeCompare(String(y.title || "")));
+    a.sort(
+      (x, y) =>
+        Number(x.displayNo || 9999) - Number(y.displayNo || 9999) ||
+        String(x.name || "").localeCompare(String(y.name || ""))
+    );
+    c.sort(
+      (x, y) =>
+        Number(x.displayNo || 9999) - Number(y.displayNo || 9999) ||
+        String(x.title || "").localeCompare(String(y.title || ""))
+    );
 
-    // Sort services by area displayNo then name
     const areaNo = new Map(a.map((x) => [x.id, Number(x.displayNo || 9999)]));
-    s.sort((x, y) => (areaNo.get(x.areaId) - areaNo.get(y.areaId)) || String(x.name || "").localeCompare(String(y.name || "")));
+    s.sort(
+      (x, y) =>
+        areaNo.get(x.areaId) - areaNo.get(y.areaId) ||
+        String(x.name || "").localeCompare(String(y.name || ""))
+    );
 
-    // Sort products by category displayNo then name
     const catNo = new Map(c.map((x) => [x.id, Number(x.displayNo || 9999)]));
-    p.sort((x, y) => (catNo.get(x.categoryId) - catNo.get(y.categoryId)) || String(x.name || "").localeCompare(String(y.name || "")));
+    p.sort(
+      (x, y) =>
+        catNo.get(x.categoryId) - catNo.get(y.categoryId) ||
+        String(x.name || "").localeCompare(String(y.name || ""))
+    );
 
     setAreas(a);
-    setServiceRows(s);
-    setProductCategories(c);
-    setProductRows(p);
+    setTreatments(s);
+    setCategories(c);
+    setProducts(p);
 
-    if (!svcAreaId && a[0]?.id) setSvcAreaId(a[0].id);
-    if (!prodCategoryId && c[0]?.id) setProdCategoryId(c[0].id);
+    if (!selectedAreaId && a[0]?.id) setSelectedAreaId(a[0].id);
+    if (!selectedCategoryId && c[0]?.id) setSelectedCategoryId(c[0].id);
   }
 
   useEffect(() => {
@@ -85,43 +109,48 @@ export default function CatalogAdminPage() {
   }, []);
 
   const areaById = useMemo(() => new Map(areas.map((a) => [a.id, a])), [areas]);
-  const catById = useMemo(() => new Map(productCategories.map((c) => [c.id, c])), [productCategories]);
+  const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
-  // ---------- Toggle UI ----------
-  function Switch({ value, onToggle }) {
-    return (
-      <div className={styles.switchWrap}>
-        <button
-          type="button"
-          className={`${styles.switch} ${value ? styles.switchOn : ""}`}
-          onClick={onToggle}
-          aria-pressed={!!value}
-          aria-label={value ? "Aktiv" : "Inaktiv"}
-        >
-          <span className={styles.knob} />
-        </button>
-        <span className={styles.switchText}>{value ? "Aktiv" : "Inaktiv"}</span>
-      </div>
-    );
-  }
+  // Search filter (applies to current view)
+  const qlc = q.trim().toLowerCase();
 
-  // ---------- Areas ----------
+  const filteredAreas = useMemo(() => {
+    if (!qlc) return areas;
+    return areas.filter((a) => String(a.name || "").toLowerCase().includes(qlc));
+  }, [areas, qlc]);
+
+  const filteredTreatments = useMemo(() => {
+    let list = treatments;
+    if (selectedAreaId) list = list.filter((s) => s.areaId === selectedAreaId);
+    if (!qlc) return list;
+    return list.filter((s) => String(s.name || s.title || "").toLowerCase().includes(qlc));
+  }, [treatments, selectedAreaId, qlc]);
+
+  const filteredCategories = useMemo(() => {
+    if (!qlc) return categories;
+    return categories.filter((c) => String(c.title || "").toLowerCase().includes(qlc));
+  }, [categories, qlc]);
+
+  const filteredProducts = useMemo(() => {
+    let list = products;
+    if (selectedCategoryId) list = list.filter((p) => p.categoryId === selectedCategoryId);
+    if (!qlc) return list;
+    return list.filter((p) => String(p.name || p.title || "").toLowerCase().includes(qlc));
+  }, [products, selectedCategoryId, qlc]);
+
+  // CRUD: Areas
   async function addArea() {
     const name = areaName.trim();
     if (!name) return;
-
     const displayNo = await nextFreeDisplayNo("areas");
-
     await db.areas.put({
       id: crypto.randomUUID(),
       displayNo,
       name,
       active: areaActive ? 1 : 0,
-      // legacy fields kept for compatibility (not used)
       code: "",
       sortOrder: 0,
     });
-
     setAreaName("");
     setAreaActive(true);
     await reload();
@@ -133,70 +162,65 @@ export default function CatalogAdminPage() {
   }
 
   async function removeArea(id) {
-    // optional safety: prevent delete if referenced by services
     const count = await db.service_catalog.where("areaId").equals(id).count();
     if (count > 0) {
-      alert("Dieser Bereich wird noch von Services verwendet. Bitte zuerst Services entfernen oder umhängen.");
+      alert(
+        "Der Bereich kann nicht gelöscht werden, da noch Services vorhanden sind. Bitte löschen Sie zuerst die Services."
+      );
       return;
     }
     await db.areas.delete(id);
+    if (selectedAreaId === id) setSelectedAreaId("");
     await reload();
   }
 
-  // ---------- Services ----------
-  async function addService() {
-    if (!svcAreaId) return;
-    const name = svcName.trim();
+  // CRUD: Treatments (service_catalog)
+  async function addTreatment() {
+    if (!selectedAreaId) return;
+    const name = treatName.trim();
     if (!name) return;
 
     await db.service_catalog.put({
       id: crypto.randomUUID(),
-      areaId: svcAreaId,
+      areaId: selectedAreaId,
       name,
-      price: Number(svcPrice || 0),
-      active: svcActive ? 1 : 0,
-      // legacy fields kept (not used)
       title: name,
+      price: Number(treatPrice || 0),
+      active: treatActive ? 1 : 0,
       category: "",
       sortOrder: 0,
     });
 
-    setSvcName("");
-    setSvcPrice(0);
-    setSvcActive(true);
+    setTreatName("");
+    setTreatPrice(0);
+    setTreatActive(true);
     await reload();
   }
 
-  async function updateService(id, patch) {
-    // keep title in sync if user edits name
+  async function updateTreatment(id, patch) {
     const p = { ...patch };
-    if (Object.prototype.hasOwnProperty.call(patch, "name")) {
-      p.title = String(patch.name || "");
-    }
+    if (Object.prototype.hasOwnProperty.call(patch, "name")) p.title = String(patch.name || "");
     await db.service_catalog.update(id, p);
     await reload();
   }
 
-  async function removeService(id) {
+  async function removeTreatment(id) {
     await db.service_catalog.delete(id);
     await reload();
   }
 
-  // ---------- Product Categories ----------
+  // CRUD: Categories
   async function addCategory() {
     const title = catName.trim();
     if (!title) return;
-
     const displayNo = await nextFreeDisplayNo("product_categories");
-
     await db.product_categories.put({
       id: crypto.randomUUID(),
       displayNo,
       title,
       active: catActive ? 1 : 0,
-      sortOrder: 0, // legacy
+      sortOrder: 0,
     });
-
     setCatName("");
     setCatActive(true);
     await reload();
@@ -210,28 +234,27 @@ export default function CatalogAdminPage() {
   async function removeCategory(id) {
     const count = await db.product_catalog.where("categoryId").equals(id).count();
     if (count > 0) {
-      alert("Diese Kategorie wird noch von Produkten verwendet. Bitte zuerst Produkte entfernen oder umhängen.");
+      alert("Diese Kategorie wird noch von Produkten verwendet. Bitte zuerst Produkte entfernen.");
       return;
     }
     await db.product_categories.delete(id);
+    if (selectedCategoryId === id) setSelectedCategoryId("");
     await reload();
   }
 
-  // ---------- Products ----------
+  // CRUD: Products
   async function addProduct() {
-    if (!prodCategoryId) return;
+    if (!selectedCategoryId) return;
     const name = prodName.trim();
     if (!name) return;
 
     await db.product_catalog.put({
       id: crypto.randomUUID(),
-      categoryId: prodCategoryId,
+      categoryId: selectedCategoryId,
       name,
+      title: name,
       price: Number(prodPrice || 0),
       active: prodActive ? 1 : 0,
-      // legacy fields kept (not used)
-      title: name,
-      category: "",
       brand: "",
       sku: "",
       sortOrder: 0,
@@ -245,9 +268,7 @@ export default function CatalogAdminPage() {
 
   async function updateProduct(id, patch) {
     const p = { ...patch };
-    if (Object.prototype.hasOwnProperty.call(patch, "name")) {
-      p.title = String(patch.name || "");
-    }
+    if (Object.prototype.hasOwnProperty.call(patch, "name")) p.title = String(patch.name || "");
     await db.product_catalog.update(id, p);
     await reload();
   }
@@ -257,360 +278,498 @@ export default function CatalogAdminPage() {
     await reload();
   }
 
+  // UI helpers
+  const areaPills = areas;
+  const catPills = categories;
+
+  const activeAreaLabel = selectedAreaId ? areaById.get(selectedAreaId) : null;
+  const activeCatLabel = selectedCategoryId ? catById.get(selectedCategoryId) : null;
+
+  // Dynamic headings (this is what you asked: title changes when clicking)
+  const treatCardTitle = subTabTreat === "areas" ? "Behandlungen" : "Services";
+  const treatCardHint =
+    subTabTreat === "areas"
+      ? "Behandlungen-Gruppen (ehem. Bereiche) verwalten."
+      : "Services (Behandlungen) je Gruppe — sauber getrennt.";
+
   return (
     <div className={styles.page}>
       <div className={styles.shell}>
-<div className={styles.top}>
-  <div className={styles.topLeft}>
-    <button
-      type="button"
-      className={styles.backBtn}
-      onClick={() => navigate("/admin")}
-      aria-label="Zurück zum Admin-Menü"
-    >
-      <span className={styles.backIcon}>←</span>
-      <span>Admin</span>
-    </button>
-
-    <div>
-      <h1 className={styles.h1}>Katalog</h1>
-      <div className={styles.sub}>
-        Verwalte Bereiche, Services, Produkt-Kategorien und Produkte.
-        Alles offline in Dexie / IndexedDB.
-      </div>
-    </div>
-  </div>
-
-  <div className={styles.badge}>
-    {areas.length} Bereiche · {serviceRows.length} Services ·{" "}
-    {productCategories.length} Kategorien · {productRows.length} Produkte
-  </div>
-</div>
-
-
-        <div className={styles.grid}>
-          {/* AREAS */}
-          <div className={styles.card}>
-            <div className={styles.cardTitle}>
-              <span>Bereiche</span>
-              <span className={styles.cardHint}>Nur Name + Aktiv. ID wird automatisch als 01/02… angezeigt.</span>
-            </div>
-
-            <div className={styles.form}>
-              <label className={styles.fLabel}>
-                Bereich
-                <input
-                  className={styles.input}
-                  value={areaName}
-                  onChange={(e) => setAreaName(e.target.value)}
-                  placeholder="z. B. Haarschnitt, Farbe, SPA"
-                />
-              </label>
-
-              <label className={styles.fLabel}>
-                Status
-                <Switch value={areaActive} onToggle={() => setAreaActive((v) => !v)} />
-              </label>
-
-              <div className={styles.actions}>
-                <button className={styles.btnPrimary} onClick={addArea} type="button">
-                  Hinzufügen
-                </button>
+        <div className={styles.topBar}>
+          {/* LEFT */}
+          <div className={styles.topLeft}>
+            <div>
+              <div className={styles.title}>Katalog</div>
+              <div className={styles.sub}>
+                Services (Behandlungen) und Produkte (Kategorien/Produkte).
               </div>
             </div>
-
-            <div className={styles.sep} />
-
-            <div className={styles.table}>
-              <div className={styles.trHead}>
-                <div>ID</div><div>Name</div><div className={styles.taRight}>—</div><div>Status</div><div className={styles.taRight}>Aktion</div>
-              </div>
-
-              {areas.map((a) => (
-                <div key={a.id} className={styles.row}>
-                  <div><span className={styles.idBadge}>{pad2(a.displayNo)}</span></div>
-
-                  <input
-                    className={styles.inlineInput}
-                    value={a.name || ""}
-                    onChange={(e) => updateArea(a.id, { name: e.target.value })}
-                  />
-
-                  <div className={styles.taRight} />
-
-                  <Switch value={!!a.active} onToggle={() => updateArea(a.id, { active: a.active ? 0 : 1 })} />
-
-                  <div className={styles.taRight}>
-                    <button className={styles.btnDanger} onClick={() => removeArea(a.id)} type="button">
-                      Löschen
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {areas.length === 0 ? <div className={styles.empty}>Noch keine Bereiche.</div> : null}
-            </div>
+            <button className={styles.backBtnLeft} type="button" onClick={() => nav("/admin")}>
+              ← Home
+            </button>
           </div>
 
-          {/* SERVICES */}
-          <div className={styles.card}>
-            <div className={styles.cardTitle}>
-              <span>Services</span>
-              <span className={styles.cardHint}>Kein Kategorie-Feld mehr. Nur Bereich + Name + Preis.</span>
-            </div>
+          {/* RIGHT */}
+          <div className={styles.topRight}>
+            <input
+              className={styles.search}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={
+                topTab === "treatments"
+                  ? "Suche Behandlungen/Services…"
+                  : "Suche Kategorien/Produkte…"
+              }
+            />
 
-            <div className={styles.form}>
-              <label className={styles.fLabel}>
-                Bereich
-                <select className={styles.select} value={svcAreaId} onChange={(e) => setSvcAreaId(e.target.value)}>
-                  {areas.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {pad2(a.displayNo)} · {a.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className={styles.fLabel}>
-                Name
-                <input
-                  className={styles.input}
-                  value={svcName}
-                  onChange={(e) => setSvcName(e.target.value)}
-                  placeholder="z. B. Haarschnitt Herren"
-                />
-              </label>
-
-              <label className={styles.fLabel}>
-                Preis (€)
-                <input
-                  className={styles.input}
-                  type="number"
-                  step="0.01"
-                  value={svcPrice}
-                  onChange={(e) => setSvcPrice(e.target.value)}
-                />
-              </label>
-
-              <label className={styles.fLabel}>
-                Status
-                <Switch value={svcActive} onToggle={() => setSvcActive((v) => !v)} />
-              </label>
-
-              <div className={styles.actions}>
-                <button className={styles.btnPrimary} onClick={addService} type="button">
-                  Hinzufügen
-                </button>
-              </div>
-            </div>
-
-            <div className={styles.sep} />
-
-            <div className={styles.table}>
-              <div className={styles.trHead}>
-                <div>Bereich</div><div>Name</div><div className={styles.taRight}>Preis</div><div>Status</div><div className={styles.taRight}>Aktion</div>
-              </div>
-
-              {serviceRows.map((s) => {
-                const a = areaById.get(s.areaId);
-                return (
-                  <div key={s.id} className={styles.row}>
-                    <div className={styles.muted}>
-                      {a ? `${pad2(a.displayNo)} · ${a.name}` : "—"}
-                    </div>
-
-                    <input
-                      className={styles.inlineInput}
-                      value={s.name || s.title || ""}
-                      onChange={(e) => updateService(s.id, { name: e.target.value })}
-                    />
-
-                    <input
-                      className={`${styles.inlineInput} ${styles.inlineRight}`}
-                      type="number"
-                      step="0.01"
-                      value={Number(s.price || 0)}
-                      onChange={(e) => updateService(s.id, { price: Number(e.target.value || 0) })}
-                    />
-
-                    <Switch value={!!s.active} onToggle={() => updateService(s.id, { active: s.active ? 0 : 1 })} />
-
-                    <div className={styles.taRight}>
-                      <button className={styles.btnDanger} onClick={() => removeService(s.id)} type="button">
-                        Löschen
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {serviceRows.length === 0 ? <div className={styles.empty}>Noch keine Services.</div> : null}
-            </div>
-          </div>
-
-          {/* PRODUCT CATEGORIES */}
-          <div className={styles.card}>
-            <div className={styles.cardTitle}>
-              <span>Produkt-Kategorien</span>
-              <span className={styles.cardHint}>Eigene Tabelle. Anzeige-ID 01/02… wird automatisch vergeben.</span>
-            </div>
-
-            <div className={styles.form}>
-              <label className={styles.fLabel}>
-                Kategorie
-                <input
-                  className={styles.input}
-                  value={catName}
-                  onChange={(e) => setCatName(e.target.value)}
-                  placeholder="z. B. HairCare, Beauty, Pflege"
-                />
-              </label>
-
-              <label className={styles.fLabel}>
-                Status
-                <Switch value={catActive} onToggle={() => setCatActive((v) => !v)} />
-              </label>
-
-              <div className={styles.actions}>
-                <button className={styles.btnPrimary} onClick={addCategory} type="button">
-                  Hinzufügen
-                </button>
-              </div>
-            </div>
-
-            <div className={styles.sep} />
-
-            <div className={styles.table}>
-              <div className={styles.trHead}>
-                <div>ID</div><div>Name</div><div className={styles.taRight}>—</div><div>Status</div><div className={styles.taRight}>Aktion</div>
-              </div>
-
-              {productCategories.map((c) => (
-                <div key={c.id} className={styles.row}>
-                  <div><span className={styles.idBadge}>{pad2(c.displayNo)}</span></div>
-
-                  <input
-                    className={styles.inlineInput}
-                    value={c.title || ""}
-                    onChange={(e) => updateCategory(c.id, { title: e.target.value })}
-                  />
-
-                  <div className={styles.taRight} />
-
-                  <Switch value={!!c.active} onToggle={() => updateCategory(c.id, { active: c.active ? 0 : 1 })} />
-
-                  <div className={styles.taRight}>
-                    <button className={styles.btnDanger} onClick={() => removeCategory(c.id)} type="button">
-                      Löschen
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {productCategories.length === 0 ? <div className={styles.empty}>Noch keine Kategorien.</div> : null}
-            </div>
-          </div>
-
-          {/* PRODUCTS */}
-          <div className={styles.card}>
-            <div className={styles.cardTitle}>
-              <span>Produkte</span>
-              <span className={styles.cardHint}>Kategorie ist ein Foreign Key (categoryId). Kein Dropdown “Modus” mehr.</span>
-            </div>
-
-            <div className={styles.form}>
-              <label className={styles.fLabel}>
-                Kategorie
-                <select className={styles.select} value={prodCategoryId} onChange={(e) => setProdCategoryId(e.target.value)}>
-                  {productCategories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {pad2(c.displayNo)} · {c.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className={styles.fLabel}>
-                Name
-                <input
-                  className={styles.input}
-                  value={prodName}
-                  onChange={(e) => setProdName(e.target.value)}
-                  placeholder="z. B. Shampoo"
-                />
-              </label>
-
-              <label className={styles.fLabel}>
-                Preis (€)
-                <input
-                  className={styles.input}
-                  type="number"
-                  step="0.01"
-                  value={prodPrice}
-                  onChange={(e) => setProdPrice(e.target.value)}
-                />
-              </label>
-
-              <label className={styles.fLabel}>
-                Status
-                <Switch value={prodActive} onToggle={() => setProdActive((v) => !v)} />
-              </label>
-
-              <div className={styles.actions}>
-                <button className={styles.btnPrimary} onClick={addProduct} type="button">
-                  Hinzufügen
-                </button>
-              </div>
-            </div>
-
-            <div className={styles.sep} />
-
-            <div className={styles.table}>
-              <div className={styles.trHead}>
-                <div>Kategorie</div><div>Name</div><div className={styles.taRight}>Preis</div><div>Status</div><div className={styles.taRight}>Aktion</div>
-              </div>
-
-              {productRows.map((p) => {
-                const c = catById.get(p.categoryId);
-                return (
-                  <div key={p.id} className={styles.row}>
-                    <div className={styles.muted}>
-                      {c ? `${pad2(c.displayNo)} · ${c.title}` : "—"}
-                    </div>
-
-                    <input
-                      className={styles.inlineInput}
-                      value={p.name || p.title || ""}
-                      onChange={(e) => updateProduct(p.id, { name: e.target.value })}
-                    />
-
-                    <input
-                      className={`${styles.inlineInput} ${styles.inlineRight}`}
-                      type="number"
-                      step="0.01"
-                      value={Number(p.price || 0)}
-                      onChange={(e) => updateProduct(p.id, { price: Number(e.target.value || 0) })}
-                    />
-
-                    <Switch value={!!p.active} onToggle={() => updateProduct(p.id, { active: p.active ? 0 : 1 })} />
-
-                    <div className={styles.taRight}>
-                      <button className={styles.btnDanger} onClick={() => removeProduct(p.id)} type="button">
-                        Löschen
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {productRows.length === 0 ? <div className={styles.empty}>Noch keine Produkte.</div> : null}
-            </div>
-
-            <div className={styles.foot}>
-              Hinweis: Services/Produkte werden später über <code>visit_services</code> / <code>visit_products</code> ausgewertet.
+            <div className={styles.tabs}>
+              <button
+                className={`${styles.tab} ${topTab === "treatments" ? styles.tabActive : ""}`}
+                onClick={() => setTopTab("treatments")}
+                type="button"
+              >
+                Behandlungen
+              </button>
+              <button
+                className={`${styles.tab} ${topTab === "products" ? styles.tabActive : ""}`}
+                onClick={() => setTopTab("products")}
+                type="button"
+              >
+                Produkte
+              </button>
             </div>
           </div>
         </div>
+
+        {/* CONTENT */}
+        {topTab === "treatments" ? (
+          <div className={styles.card}>
+            <div className={styles.cardHead}>
+              <div>
+                <div className={styles.cardTitle}>{treatCardTitle}</div>
+                <div className={styles.cardHint}>{treatCardHint}</div>
+              </div>
+
+              <div className={styles.subTabs}>
+                {/* CHANGED: Bereiche -> Behandlungen */}
+                <button
+                  className={`${styles.subTab} ${subTabTreat === "areas" ? styles.subTabActive : ""}`}
+                  onClick={() => setSubTabTreat("areas")}
+                  type="button"
+                >
+                  Behandlungen
+                </button>
+
+                {/* CHANGED: Behandlungen -> Services */}
+                <button
+                  className={`${styles.subTab} ${subTabTreat === "treatments" ? styles.subTabActive : ""}`}
+                  onClick={() => setSubTabTreat("treatments")}
+                  type="button"
+                >
+                  Services
+                </button>
+              </div>
+            </div>
+
+            {subTabTreat === "areas" ? (
+              <>
+                <div className={styles.formRow}>
+                  <div className={styles.field}>
+                    <div className={styles.label}>Behandlung (Gruppe)</div>
+                    <input
+                      className={styles.input}
+                      value={areaName}
+                      onChange={(e) => setAreaName(e.target.value)}
+                      placeholder="z. B. Augenbrauen, Haare, SPA"
+                    />
+                  </div>
+                  <div className={styles.fieldInline}>
+                    <div className={styles.label}>Aktiv</div>
+                    <Switch value={areaActive} onToggle={() => setAreaActive((v) => !v)} />
+                  </div>
+                  <button className={styles.primaryBtn} onClick={addArea} type="button">
+                    Hinzufügen
+                  </button>
+                </div>
+
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th className={styles.right}>Aktion</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredAreas.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className={styles.muted}>
+                            Keine Behandlungen.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredAreas.map((a) => (
+                          <tr key={a.id}>
+                            <td>
+                              <span className={styles.idBadge}>{pad2(a.displayNo)}</span>
+                            </td>
+                            <td>
+                              <input
+                                className={styles.inlineInput}
+                                value={a.name || ""}
+                                onChange={(e) => updateArea(a.id, { name: e.target.value })}
+                              />
+                            </td>
+                            <td>
+                              <Switch
+                                value={!!a.active}
+                                onToggle={() => updateArea(a.id, { active: a.active ? 0 : 1 })}
+                              />
+                            </td>
+                            <td className={styles.right}>
+                              <button
+                                className={styles.dangerBtn}
+                                onClick={() => removeArea(a.id)}
+                                type="button"
+                              >
+                                Löschen
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className={styles.pillsRow}>
+                  {areaPills.map((a) => (
+                    <button
+                      key={a.id}
+                      className={`${styles.pill} ${selectedAreaId === a.id ? styles.pillActive : ""}`}
+                      onClick={() => setSelectedAreaId(a.id)}
+                      type="button"
+                    >
+                      {a.name}
+                    </button>
+                  ))}
+                </div>
+
+                <div className={styles.formRow}>
+                  <div className={styles.field}>
+                    <div className={styles.label}>
+                      Service (für {activeAreaLabel ? activeAreaLabel.name : "—"})
+                    </div>
+                    <input
+                      className={styles.input}
+                      value={treatName}
+                      onChange={(e) => setTreatName(e.target.value)}
+                      placeholder="z. B. Augenbrauen zupfen"
+                    />
+                  </div>
+
+                  <div className={styles.field}>
+                    <div className={styles.label}>Preis (€)</div>
+                    <input
+                      className={styles.input}
+                      type="number"
+                      step="0.01"
+                      value={treatPrice}
+                      onChange={(e) => setTreatPrice(e.target.value)}
+                    />
+                  </div>
+
+                  <div className={styles.fieldInline}>
+                    <div className={styles.label}>Aktiv</div>
+                    <Switch value={treatActive} onToggle={() => setTreatActive((v) => !v)} />
+                  </div>
+
+                  <button className={styles.primaryBtn} onClick={addTreatment} type="button">
+                    Hinzufügen
+                  </button>
+                </div>
+
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th className={styles.right}>Preis</th>
+                        <th>Status</th>
+                        <th className={styles.right}>Aktion</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTreatments.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className={styles.muted}>
+                            Keine Services in dieser Behandlung.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredTreatments.map((s) => (
+                          <tr key={s.id}>
+                            <td>
+                              <input
+                                className={styles.inlineInput}
+                                value={s.name || s.title || ""}
+                                onChange={(e) => updateTreatment(s.id, { name: e.target.value })}
+                              />
+                            </td>
+                            <td className={styles.right}>
+                              <input
+                                className={`${styles.inlineInput} ${styles.inlineRight}`}
+                                type="number"
+                                step="0.01"
+                                value={Number(s.price || 0)}
+                                onChange={(e) =>
+                                  updateTreatment(s.id, { price: Number(e.target.value || 0) })
+                                }
+                              />
+                            </td>
+                            <td>
+                              <Switch
+                                value={!!s.active}
+                                onToggle={() => updateTreatment(s.id, { active: s.active ? 0 : 1 })}
+                              />
+                            </td>
+                            <td className={styles.right}>
+                              <button
+                                className={styles.dangerBtn}
+                                onClick={() => removeTreatment(s.id)}
+                                type="button"
+                              >
+                                Löschen
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className={styles.card}>
+            <div className={styles.cardHead}>
+              <div>
+                <div className={styles.cardTitle}>Produkte</div>
+                <div className={styles.cardHint}>Kategorien & Produkte — mit Filter je Kategorie.</div>
+              </div>
+
+              <div className={styles.subTabs}>
+                <button
+                  className={`${styles.subTab} ${subTabProd === "categories" ? styles.subTabActive : ""}`}
+                  onClick={() => setSubTabProd("categories")}
+                  type="button"
+                >
+                  Kategorien
+                </button>
+                <button
+                  className={`${styles.subTab} ${subTabProd === "products" ? styles.subTabActive : ""}`}
+                  onClick={() => setSubTabProd("products")}
+                  type="button"
+                >
+                  Produkte
+                </button>
+              </div>
+            </div>
+
+            {subTabProd === "categories" ? (
+              <>
+                <div className={styles.formRow}>
+                  <div className={styles.field}>
+                    <div className={styles.label}>Kategorie</div>
+                    <input
+                      className={styles.input}
+                      value={catName}
+                      onChange={(e) => setCatName(e.target.value)}
+                      placeholder="z. B. HairCare, Beauty, Pflege"
+                    />
+                  </div>
+                  <div className={styles.fieldInline}>
+                    <div className={styles.label}>Aktiv</div>
+                    <Switch value={catActive} onToggle={() => setCatActive((v) => !v)} />
+                  </div>
+                  <button className={styles.primaryBtn} onClick={addCategory} type="button">
+                    Hinzufügen
+                  </button>
+                </div>
+
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th className={styles.right}>Aktion</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredCategories.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className={styles.muted}>
+                            Keine Kategorien.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredCategories.map((c) => (
+                          <tr key={c.id}>
+                            <td>
+                              <span className={styles.idBadge}>{pad2(c.displayNo)}</span>
+                            </td>
+                            <td>
+                              <input
+                                className={styles.inlineInput}
+                                value={c.title || ""}
+                                onChange={(e) => updateCategory(c.id, { title: e.target.value })}
+                              />
+                            </td>
+                            <td>
+                              <Switch
+                                value={!!c.active}
+                                onToggle={() => updateCategory(c.id, { active: c.active ? 0 : 1 })}
+                              />
+                            </td>
+                            <td className={styles.right}>
+                              <button
+                                className={styles.dangerBtn}
+                                onClick={() => removeCategory(c.id)}
+                                type="button"
+                              >
+                                Löschen
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className={styles.pillsRow}>
+                  {catPills.map((c) => (
+                    <button
+                      key={c.id}
+                      className={`${styles.pill} ${selectedCategoryId === c.id ? styles.pillActive : ""}`}
+                      onClick={() => setSelectedCategoryId(c.id)}
+                      type="button"
+                    >
+                      {c.title}
+                    </button>
+                  ))}
+                </div>
+
+                <div className={styles.formRow}>
+                  <div className={styles.field}>
+                    <div className={styles.label}>
+                      Produkt (für {activeCatLabel ? activeCatLabel.title : "—"})
+                    </div>
+                    <input
+                      className={styles.input}
+                      value={prodName}
+                      onChange={(e) => setProdName(e.target.value)}
+                      placeholder="z. B. Shampoo"
+                    />
+                  </div>
+
+                  <div className={styles.field}>
+                    <div className={styles.label}>Preis (€)</div>
+                    <input
+                      className={styles.input}
+                      type="number"
+                      step="0.01"
+                      value={prodPrice}
+                      onChange={(e) => setProdPrice(e.target.value)}
+                    />
+                  </div>
+
+                  <div className={styles.fieldInline}>
+                    <div className={styles.label}>Aktiv</div>
+                    <Switch value={prodActive} onToggle={() => setProdActive((v) => !v)} />
+                  </div>
+
+                  <button className={styles.primaryBtn} onClick={addProduct} type="button">
+                    Hinzufügen
+                  </button>
+                </div>
+
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th className={styles.right}>Preis</th>
+                        <th>Status</th>
+                        <th className={styles.right}>Aktion</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredProducts.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className={styles.muted}>
+                            Keine Produkte in dieser Kategorie.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredProducts.map((p) => (
+                          <tr key={p.id}>
+                            <td>
+                              <input
+                                className={styles.inlineInput}
+                                value={p.name || p.title || ""}
+                                onChange={(e) => updateProduct(p.id, { name: e.target.value })}
+                              />
+                            </td>
+                            <td className={styles.right}>
+                              <input
+                                className={`${styles.inlineInput} ${styles.inlineRight}`}
+                                type="number"
+                                step="0.01"
+                                value={Number(p.price || 0)}
+                                onChange={(e) =>
+                                  updateProduct(p.id, { price: Number(e.target.value || 0) })
+                                }
+                              />
+                            </td>
+                            <td>
+                              <Switch
+                                value={!!p.active}
+                                onToggle={() => updateProduct(p.id, { active: p.active ? 0 : 1 })}
+                              />
+                            </td>
+                            <td className={styles.right}>
+                              <button
+                                className={styles.dangerBtn}
+                                onClick={() => removeProduct(p.id)}
+                                type="button"
+                              >
+                                Löschen
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className={styles.footNote}>
+                  Hinweis: Auswertung später über <code>visit_services</code> / <code>visit_products</code>.
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

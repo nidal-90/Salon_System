@@ -19,7 +19,7 @@ function fmtDateTime(iso) {
 
 // Code: salon-friendly, no confusing chars
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no I, L, O, 0, 1
-function randomCodePart(len = 6) {
+function randomCodePart(len = 4) {
   let out = "";
   for (let i = 0; i < len; i++) {
     out += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
@@ -34,15 +34,24 @@ function normalizeCode(s) {
     .replace(/[^A-Z0-9-]/g, "");
 }
 
-async function generateUniqueVoucherCode(prefix = "SIBEL") {
-  // try a few times (collision chance is tiny)
-  for (let i = 0; i < 12; i++) {
-    const code = `${prefix}-${randomCodePart(6)}`;
+/**
+ * Required format:
+ *   SBL-XXXX-XXXX  (3 parts)
+ * - Prefix must be "SBL"
+ * - Two random blocks (4+4) from CODE_ALPHABET
+ * - Ensure uniqueness in db.vouchers by checking collisions
+ */
+async function generateUniqueVoucherCode(prefix = "SBL") {
+  const p = String(prefix || "SBL").toUpperCase();
+
+  for (let i = 0; i < 16; i++) {
+    const code = `${p}-${randomCodePart(4)}-${randomCodePart(4)}`;
     const exists = await db.vouchers.where("code").equals(code).first();
     if (!exists) return code;
   }
-  // fallback: add timestamp-ish suffix
-  const code = `${prefix}-${randomCodePart(6)}-${String(Date.now()).slice(-4)}`;
+
+  // fallback: add a tiny extra suffix part (still starts with SBL and stays readable)
+  const code = `${p}-${randomCodePart(4)}-${randomCodePart(4)}-${String(Date.now()).slice(-3)}`;
   return code;
 }
 
@@ -140,10 +149,8 @@ export default function VoucherAdminPage() {
     if (!Number.isFinite(amt) || amt <= 0) return;
 
     const now = new Date().toISOString();
-    const code = await generateUniqueVoucherCode("SIBEL");
+    const code = await generateUniqueVoucherCode("SBL");
 
-    // Created-by: keep it flexible
-    // If your app has a "current user" store later, you can wire it here.
     const createdByStaffId = "cashier";
     const createdByStaffName = "Kasse";
 
@@ -186,7 +193,6 @@ export default function VoucherAdminPage() {
     const now = new Date().toISOString();
 
     if (nextStatus === "redeemed") {
-      // mark as redeemed
       await db.vouchers.update(v.id, {
         status: "redeemed",
         redeemedAt: now,
@@ -194,11 +200,8 @@ export default function VoucherAdminPage() {
         redeemedByStaffName: "Kasse",
       });
     } else if (nextStatus === "void") {
-      await db.vouchers.update(v.id, {
-        status: "void",
-      });
+      await db.vouchers.update(v.id, { status: "void" });
     } else if (nextStatus === "active") {
-      // reactivate and clear redeem fields
       await db.vouchers.update(v.id, {
         status: "active",
         redeemedAt: "",
@@ -213,56 +216,74 @@ export default function VoucherAdminPage() {
     setSelected(refreshed);
   }
 
+  async function deleteVoucher(v) {
+  if (!v?.id) return;
+
+  const ok = window.confirm(`Gutschein wirklich löschen?\n\nCode: ${v.code}\nDieser Schritt kann nicht rückgängig gemacht werden.`);
+  if (!ok) return;
+
+  await db.vouchers.delete(v.id);
+
+  // falls gerade im Modal geöffnet, sauber schließen
+  if (selected?.id === v.id) {
+    setOpen(false);
+    setSelected(null);
+  }
+
+  await reload();
+}
+
   async function copyCode(code) {
     try {
       await navigator.clipboard.writeText(String(code || ""));
     } catch {
-      // ignore (some browsers / http)
+      // ignore
     }
   }
 
   return (
-    <AdminShell
-      title="Gutscheine"
-      subtitle="Gutscheine erstellen, Status prüfen, Einlösen/Storno. Codes werden automatisch generiert."
+     <AdminShell
+    title="Gutscheine"
+    subtitle="Gutscheine erstellen, Status prüfen, Einlösen/Storno. Codes werden automatisch generiert."
+    left={
+      <button
+        className={styles.backBtn}
+        type="button"
+        onClick={() => nav("/admin")}
+        aria-label="Zurück zum Admin-Menü"
+      >
+        <span className={styles.backIcon}>←</span>
+        <span>Home</span>
+      </button>
+    }
       right={
-        <div className={styles.rightTools}>
-          <button
-            className={styles.backBtn}
-            type="button"
-            onClick={() => nav("/admin")}
-            aria-label="Zurück zum Admin-Menü"
-          >
-            <span className={styles.backIcon}>←</span>
-            <span>Admin</span>
-          </button>
-
-          <div className={styles.searchBox}>
-            <input
-              className={styles.search}
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Suche: Code, Status, Ersteller, Betrag…"
-            />
-          </div>
-
-          <select
-            className={styles.select}
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            aria-label="Status Filter"
-          >
-            <option value="all">Alle</option>
-            <option value="active">Aktiv</option>
-            <option value="redeemed">Eingelöst</option>
-            <option value="void">Storniert</option>
-          </select>
-
-          <button className={styles.primaryBtn} type="button" onClick={openCreate}>
-            + Gutschein
-          </button>
+      <div className={styles.rightTools}>
+        <div className={styles.searchBox}>
+          <input
+            className={styles.search}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Suche: Code, Status, Ersteller, Betrag…"
+          />
         </div>
-      }
+
+        <select
+          className={styles.select}
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          aria-label="Status Filter"
+        >
+          <option value="all">Alle</option>
+          <option value="active">Aktiv</option>
+          <option value="redeemed">Eingelöst</option>
+          <option value="void">Storniert</option>
+        </select>
+
+        <button className={styles.primaryBtn} type="button" onClick={openCreate}>
+          + Gutschein
+        </button>
+      </div>
+    }
     >
       <div className={styles.grid}>
         <div className={styles.kpi}>
@@ -324,16 +345,7 @@ export default function VoucherAdminPage() {
                     <tr key={v.id} className={styles.row} onClick={() => openVoucher(v)}>
                       <td className={styles.codeCell}>
                         <span className={styles.code}>{v.code}</span>
-                        <button
-                          type="button"
-                          className={styles.copyBtn}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyCode(v.code);
-                          }}
-                        >
-                          Kopieren
-                        </button>
+                    
                       </td>
                       <td>
                         <StatusPill status={v.status} />
@@ -344,35 +356,48 @@ export default function VoucherAdminPage() {
                       <td>{v.currency || "EUR"}</td>
                       <td>{fmtDateTime(v.createdAt)}</td>
                       <td className={styles.muted2}>{v.createdByStaffName || "-"}</td>
-                      <td className={styles.right} onClick={(e) => e.stopPropagation()}>
-                        {v.status === "active" ? (
-                          <>
-                            <button className={styles.ghostBtn} type="button" onClick={() => setStatus(v, "redeemed")}>
-                              Einlösen
-                            </button>
-                            <button className={styles.dangerBtn} type="button" onClick={() => setStatus(v, "void")}>
-                              Storno
-                            </button>
-                          </>
-                        ) : v.status === "redeemed" ? (
-                          <button className={styles.ghostBtn} type="button" onClick={() => setStatus(v, "active")}>
-                            Reaktivieren
-                          </button>
-                        ) : (
-                          <button className={styles.ghostBtn} type="button" onClick={() => setStatus(v, "active")}>
-                            Reaktivieren
-                          </button>
-                        )}
-                      </td>
+<td className={styles.right} onClick={(e) => e.stopPropagation()}>
+  {v.status === "active" ? (
+    <>
+      <button className={styles.ghostBtn} type="button" onClick={() => setStatus(v, "redeemed")}>
+        Einlösen
+      </button>
+      <button className={styles.dangerBtn} type="button" onClick={() => setStatus(v, "void")}>
+        Storno
+      </button>
+      <button
+        className={styles.dangerBtn}
+        type="button"
+        onClick={() => deleteVoucher(v)}
+        aria-label="Gutschein löschen"
+      >
+        Löschen
+      </button>
+    </>
+  ) : (
+    <>
+      <button className={styles.ghostBtn} type="button" onClick={() => setStatus(v, "active")}>
+        Reaktivieren
+      </button>
+      <button
+        className={styles.dangerBtn}
+        type="button"
+        onClick={() => deleteVoucher(v)}
+        aria-label="Gutschein löschen"
+      >
+        Löschen
+      </button>
+    </>
+  )}
+</td>
+
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
 
-            <div className={styles.hint}>
-              Hinweis: „Einlösen“ setzt Status auf <b>redeemed</b> inkl. Zeitstempel. „Storno“ setzt Status auf <b>void</b>.
-            </div>
+           
           </div>
         </div>
       </div>
@@ -403,12 +428,16 @@ export default function VoucherAdminPage() {
               placeholder="z. B. 50"
               inputMode="decimal"
             />
-            <span className={styles.help}>Der Code wird automatisch generiert.</span>
+            <span className={styles.help}>Der Code wird automatisch generiert (SBL-XXXX-XXXX).</span>
           </label>
 
           <label className={styles.field}>
             <span className={styles.label}>Währung</span>
-            <select className={styles.input} value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            <select
+              className={styles.input}
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+            >
               <option value="EUR">EUR</option>
               <option value="USD">USD</option>
               <option value="GBP">GBP</option>
@@ -439,23 +468,30 @@ export default function VoucherAdminPage() {
               Schließen
             </button>
 
-            {selected?.status === "active" ? (
-              <>
-                <button className={styles.ghostBtn} type="button" onClick={() => copyCode(selected.code)}>
-                  Code kopieren
-                </button>
-                <button className={styles.primaryBtn} type="button" onClick={() => setStatus(selected, "redeemed")}>
-                  Einlösen
-                </button>
-                <button className={styles.dangerBtn} type="button" onClick={() => setStatus(selected, "void")}>
-                  Storno
-                </button>
-              </>
-            ) : (
-              <button className={styles.ghostBtn} type="button" onClick={() => setStatus(selected, "active")}>
-                Reaktivieren
-              </button>
-            )}
+         {selected?.status === "active" ? (
+  <>
+
+    <button className={styles.primaryBtn} type="button" onClick={() => setStatus(selected, "redeemed")}>
+      Einlösen
+    </button>
+    <button className={styles.dangerBtn} type="button" onClick={() => setStatus(selected, "void")}>
+      Storno
+    </button>
+    <button className={styles.dangerBtn} type="button" onClick={() => deleteVoucher(selected)}>
+      Löschen
+    </button>
+  </>
+) : (
+  <>
+    <button className={styles.ghostBtn} type="button" onClick={() => setStatus(selected, "active")}>
+      Reaktivieren
+    </button>
+    <button className={styles.dangerBtn} type="button" onClick={() => deleteVoucher(selected)}>
+      Löschen
+    </button>
+  </>
+)}
+
           </div>
         }
       >
@@ -486,7 +522,9 @@ export default function VoucherAdminPage() {
               <div className={styles.detailTitle}>Einlösung</div>
 
               <div className={styles.detailTitle2}>Eingelöst am</div>
-              <div className={styles.detailValue}>{selected.redeemedAt ? fmtDateTime(selected.redeemedAt) : "-"}</div>
+              <div className={styles.detailValue}>
+                {selected.redeemedAt ? fmtDateTime(selected.redeemedAt) : "-"}
+              </div>
 
               <div className={styles.detailTitle2}>Eingelöst durch</div>
               <div className={styles.detailValue}>{selected.redeemedByStaffName || "-"}</div>

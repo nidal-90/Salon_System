@@ -1,12 +1,15 @@
-/* src/features/admin/pages/CatalogAdminPage.module.css */
-/* Modern 2025 / Apple-like / MUI-friendly */
+/* src/features/kiosk/pages/KioskOrderEmbed.module.css */
+/* Match Admin look (Customer/Coupons/Catalog): bg/panel/stroke/shadow/radius/black buttons */
 
+/* ========= Design Tokens (same language as Admin) ========= */
 :root{
   --bg: #f6f7fb;
   --panel: rgba(255,255,255,.82);
   --panel2: rgba(255,255,255,.72);
+
   --stroke: rgba(15, 23, 42, 0.10);
   --stroke2: rgba(15, 23, 42, 0.14);
+
   --text: #0b1220;
   --muted: rgba(11,18,32,.62);
   --muted2: rgba(11,18,32,.44);
@@ -20,385 +23,468 @@
 
   --black: #111;
   --black2: #0b0b0b;
+  --focus: rgba(17,17,17,.18);
 
   --danger: #e5484d;
   --dangerBg: rgba(229,72,77,.10);
   --dangerStroke: rgba(229,72,77,.25);
-
-  --focus: rgba(17,17,17,.18);
 }
 
-.page{
-  min-height: 100vh;
-  padding: 22px 16px 44px;
-  background:
-    radial-gradient(1200px 600px at 20% 0%, rgba(0,0,0,.06), transparent 60%),
-    radial-gradient(900px 500px at 80% 10%, rgba(0,0,0,.05), transparent 60%),
-    var(--bg);
-  color: var(--text);
-}
-
-.shell{
-  width: min(1240px, 100%);
-  margin: 0 auto;
-  display: grid;
-  gap: 14px;
-}
-
-/* ===== Top Header ===== */
-.top{
-  display:flex;
-  align-items:flex-end;
-  justify-content:space-between;
-  gap: 12px;
-  padding: 18px 18px;
+/* ========= Container / Frame ========= */
+/* This component is embedded inside Reception; keep it premium + consistent */
+.wrap{
   border-radius: var(--radius-xl);
-  background: var(--panel);
   border: 1px solid var(--stroke);
+  background: var(--panel);
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
+  overflow: hidden;
 }
 
-.h1{
-  margin: 0;
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: -0.02em;
+/* ========= Header ========= */
+.header{
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--stroke);
+  background: rgba(255,255,255,.70);
 }
 
-.sub{
-  margin-top: 6px;
-  font-size: 13px;
-  color: var(--muted);
-  line-height: 1.35;
-}
-
-.badge{
-  font-weight: 900;
-  padding: 10px 12px;
-  border-radius: 999px;
-  background: rgba(17,17,17,.06);
-  border: 1px solid rgba(17,17,17,.10);
-  color: rgba(11,18,32,.82);
-}
-
-/* ===== Grid Layout ===== */
-.grid{
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-@media (max-width: 1100px){
-  .grid{ grid-template-columns: 1fr; }
-}
-
-/* ===== Cards ===== */
-.card{
-  padding: 16px;
-  border-radius: var(--radius-xl);
-  background: var(--panel);
-  border: 1px solid var(--stroke);
-  box-shadow: var(--shadow2);
-  backdrop-filter: blur(14px);
-}
-
-.cardTitle{
-  display:flex;
-  align-items:baseline;
-  justify-content:space-between;
-  gap:10px;
-  font-size: 15px;
-  font-weight: 900;
-  letter-spacing: -0.01em;
-  margin-bottom: 10px;
-}
-
-.cardHint{
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 700;
-}
-
-/* ===== Form ===== */
-.form{
-  display:grid;
-  grid-template-columns: 1.2fr 1.2fr 0.9fr auto;
-  gap: 10px;
-  align-items: end;
-  padding: 12px;
-  border-radius: var(--radius-lg);
-  background: rgba(255,255,255,.60);
-  border: 1px solid var(--stroke);
-}
-
-@media (max-width: 1100px){
-  .form{ grid-template-columns: 1fr; }
-}
-
-.fLabel{
-  display:grid;
-  gap: 6px;
+.kicker{
   font-size: 11px;
-  font-weight: 900;
-  letter-spacing: .08em;
+  font-weight: 950;
+  letter-spacing: .12em;
   text-transform: uppercase;
-  color: rgba(11,18,32,.72);
+  color: rgba(11,18,32,.52);
 }
 
-.input, .select{
-  height: 44px;
-  padding: 0 12px;
-  border-radius: 14px;
-  border: 1px solid var(--stroke2);
-  background: rgba(255,255,255,.96);
-  outline: none;
+.name{
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 950;
+  letter-spacing: -0.01em;
   color: var(--text);
-  font-weight: 700;
 }
 
-.input::placeholder{ color: rgba(11,18,32,.40); font-weight: 700; }
+/* ========= Body Layout ========= */
+.body{
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 12px;
+  padding: 14px;
+}
 
-.input:focus, .select:focus{
-  border-color: rgba(17,17,17,.22);
+@media (max-width: 980px){
+  .body{
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ========= Left Side Tabs ========= */
+.tabs{
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.74);
+  box-shadow: var(--shadow2);
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+  height: fit-content;
+}
+
+.tab{
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke2);
+  background: rgba(255,255,255,.92);
+  color: rgba(11,18,32,.86);
+  font-weight: 950;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.tab:hover{
+  background: rgba(255,255,255,.98);
+  transform: translateY(-1px);
+}
+
+.tabOn{
+  background: rgba(17,17,17,.06);
+  border-color: rgba(17,17,17,.18);
   box-shadow: 0 0 0 4px var(--focus);
 }
 
-.actions{
-  display:flex;
-  justify-content:flex-end;
-  align-items:center;
-  gap: 10px;
+/* ========= Main Card ========= */
+.main{
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.74);
+  box-shadow: var(--shadow2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Primary (black) */
-.btnPrimary{
+/* The scroll area for main content */
+.mainScroll{
+  padding: 14px;
+}
+
+/* Footer stays sticky inside the right card */
+.stickyFooter{
+  border-top: 1px solid var(--stroke);
+  background: rgba(255,255,255,.76);
+  padding: 12px 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Primary action (black like admin) */
+.primary{
   height: 44px;
-  padding: 0 14px;
-  border-radius: 14px;
+  padding: 0 16px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(17,17,17,.22);
   background: var(--black);
   color: #fff;
-  font-weight: 900;
+  font-weight: 950;
   letter-spacing: .01em;
   cursor: pointer;
   box-shadow: 0 14px 28px rgba(0,0,0,.14);
   transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
 
-.btnPrimary:hover{
+.primary:hover{
   background: var(--black2);
   transform: translateY(-1px);
   box-shadow: 0 16px 32px rgba(0,0,0,.16);
 }
 
-.btnPrimary:active{
+.primary:active{
   transform: translateY(0);
 }
 
-/* Secondary small actions */
-.btnGhost{
-  height: 44px;
-  padding: 0 12px;
-  border-radius: 14px;
-  border: 1px solid var(--stroke2);
-  background: rgba(255,255,255,.88);
-  color: rgba(11,18,32,.86);
-  font-weight: 900;
-  cursor:pointer;
+/* ========= Panels (Treatments / Products / Staff / Notes) ========= */
+.panel{
+  display: grid;
+  gap: 12px;
 }
 
-.btnGhost:hover{
-  background: rgba(255,255,255,.96);
+/* Panel header: title + search on the right (admin-like) */
+.panelTop{
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-/* Separators */
-.sep{
-  margin: 12px 0;
-  border-top: 1px solid var(--stroke);
-}
-
-/* ===== Table/List ===== */
-.table{
-  display:grid;
-  gap: 10px;
-}
-
-.trHead{
-  display:grid;
-  grid-template-columns: 1fr 1.4fr 0.8fr 0.6fr auto;
-  gap: 10px;
-  align-items:center;
-  padding: 0 10px;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: .10em;
-  text-transform: uppercase;
-  color: rgba(11,18,32,.55);
-}
-
-@media (max-width: 760px){
-  .trHead{ display:none; }
-}
-
-.row{
-  display:grid;
-  grid-template-columns: 1fr 1.4fr 0.8fr 0.6fr auto;
-  gap: 10px;
-  align-items:center;
-  padding: 12px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.74);
-}
-
-@media (max-width: 760px){
-  .row{
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-}
-
-.rowLeft{
-  display:grid;
-  gap: 6px;
-}
-
-.metaSmall{
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 800;
-}
-
-.inlineInput{
-  height: 42px;
-  padding: 0 12px;
-  border-radius: 14px;
-  border: 1px solid var(--stroke2);
-  background: rgba(255,255,255,.96);
-  outline:none;
-  font-weight: 800;
+.panelTitle{
+  margin: 0;
+  font-size: 15px;
+  font-weight: 950;
+  letter-spacing: -0.01em;
   color: var(--text);
 }
 
-.inlineInput:focus{
+/* Search field */
+.searchWrap{
+  min-width: 280px;
+}
+
+@media (max-width: 760px){
+  .searchWrap{
+    min-width: 0;
+    flex: 1;
+  }
+}
+
+.search{
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--stroke2);
+  background: rgba(255,255,255,.96);
+  outline: none;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.search::placeholder{
+  color: rgba(11,18,32,.40);
+  font-weight: 800;
+}
+
+.search:focus{
   border-color: rgba(17,17,17,.22);
   box-shadow: 0 0 0 4px var(--focus);
 }
 
-.inlineRight{
-  text-align:right;
+/* ========= Category/Area tabs row (chips) ========= */
+.chipsRow{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.60);
 }
 
-.inlineSelect{
-  height: 42px;
+/* Chip = same visual language as admin pills */
+.chip{
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke2);
+  background: rgba(255,255,255,.90);
+  color: rgba(11,18,32,.86);
+  font-weight: 950;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.chip:hover{
+  background: rgba(255,255,255,.98);
+  transform: translateY(-1px);
+}
+
+.chipOn{
+  background: rgba(17,17,17,.06);
+  border-color: rgba(17,17,17,.18);
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+/* ========= List Box (scroll) ========= */
+.listBox{
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.62);
+  padding: 12px;
+}
+
+/* Internal scroll: show approx. 10 items, then scroll */
+.items{
+  display: grid;
+  gap: 10px;
+
+  /* Approx 10 rows depending on content density.
+     Adjust if needed, but this matches typical admin item height well. */
+  max-height: 720px;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+/* nicer scrollbars (optional, harmless) */
+.items::-webkit-scrollbar{ width: 10px; }
+.items::-webkit-scrollbar-thumb{
+  background: rgba(11,18,32,.16);
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,.55);
+}
+.items::-webkit-scrollbar-track{ background: transparent; }
+
+/* ========= Item Cards (service/product rows) ========= */
+.item{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 12px 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.78);
+  box-shadow: var(--shadow2);
+}
+
+.itemOn{
+  border-color: rgba(17,17,17,.20);
+  background: rgba(17,17,17,.04);
+}
+
+.itemLeft{
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.itemTitle{
+  font-weight: 950;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.itemMeta{
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 850;
+}
+
+/* Right side buttons inside item */
+.itemBtn{
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(17,17,17,.22);
+  background: var(--black);
+  color: #fff;
+  font-weight: 950;
+  cursor: pointer;
+  transition: transform 140ms ease, background 140ms ease;
+  flex: 0 0 auto;
+}
+
+.itemBtn:hover{
+  background: var(--black2);
+  transform: translateY(-1px);
+}
+
+.itemBtnOn{
+  background: rgba(255,255,255,.92);
+  color: rgba(11,18,32,.86);
+  border-color: rgba(11,18,32,.18);
+}
+
+.itemBtnGhost{
+  height: 40px;
   padding: 0 12px;
-  border-radius: 14px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke2);
+  background: rgba(255,255,255,.92);
+  color: rgba(11,18,32,.86);
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.itemBtnGhost:hover{
+  background: rgba(255,255,255,.98);
+}
+
+/* For products: + and - buttons row */
+.productBtns{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ========= Staff Panel ========= */
+.staffGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 10px;
+}
+@media (max-width: 900px){
+  .staffGrid{ grid-template-columns: 1fr; }
+}
+
+.staffCard{
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.78);
+  box-shadow: var(--shadow2);
+  padding: 12px;
+}
+
+.staffHead{
+  display:flex;
+  gap: 8px;
+  align-items:baseline;
+  margin-bottom: 10px;
+  color: rgba(11,18,32,.86);
+  font-weight: 900;
+}
+
+.select{
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--stroke2);
   background: rgba(255,255,255,.96);
-  outline:none;
+  outline: none;
   font-weight: 800;
   color: var(--text);
 }
 
-/* ===== Switch (no text inside) ===== */
-.switchWrap{
-  display:flex;
-  align-items:center;
-  gap: 10px;
+.select:focus{
+  border-color: rgba(17,17,17,.22);
+  box-shadow: 0 0 0 4px var(--focus);
 }
 
-.switchLabel{
+.small{
+  margin-top: 8px;
   font-size: 12px;
-  font-weight: 900;
-  color: rgba(11,18,32,.68);
+  color: var(--muted);
+  font-weight: 850;
 }
 
-.switch{
-  position: relative;
-  width: 54px;
-  height: 34px;
-  border-radius: 999px;
-  border: 1px solid rgba(17,17,17,.18);
-  background: rgba(17,17,17,.08);
-  cursor: pointer;
-  display:flex;
-  align-items:center;
-  padding: 0 6px;
-  transition: background 140ms ease, border-color 140ms ease;
+/* ========= Notes ========= */
+.textarea{
+  width: 100%;
+  min-height: 140px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--stroke2);
+  background: rgba(255,255,255,.96);
+  outline: none;
+  font-weight: 800;
+  color: var(--text);
+  resize: vertical;
 }
 
-.switchOn{
-  background: rgba(17,17,17,.18);
-  border-color: rgba(17,17,17,.26);
+.textarea:focus{
+  border-color: rgba(17,17,17,.22);
+  box-shadow: 0 0 0 4px var(--focus);
 }
 
-.knob{
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
-  background: #fff;
-  border: 1px solid rgba(17,17,17,.12);
-  box-shadow: 0 10px 18px rgba(0,0,0,.14);
-  transform: translateX(0);
-  transition: transform 160ms ease;
+/* ========= Products: Optional mini cart summary (if used) ========= */
+.cartMini{
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.70);
 }
 
-.switchOn .knob{
-  transform: translateX(20px);
+.cartMiniTitle{
+  font-weight: 950;
+  color: rgba(11,18,32,.86);
 }
 
-/* ===== Delete ===== */
-.btnDanger{
-  height: 42px;
-  padding: 0 12px;
-  border-radius: 14px;
-  border: 1px solid var(--dangerStroke);
-  background: rgba(255,255,255,.86);
-  color: rgba(160, 21, 26, .95);
-  font-weight: 900;
-  cursor:pointer;
-  transition: background 140ms ease, transform 140ms ease;
+.cartMiniLine{
+  margin-top: 4px;
+  color: var(--muted);
+  font-weight: 850;
+  font-size: 12px;
 }
 
-.btnDanger:hover{
-  background: var(--dangerBg);
-  transform: translateY(-1px);
+.cartMiniSep{
+  margin: 0 6px;
+  opacity: .65;
 }
 
-.btnDanger:active{
-  transform: translateY(0);
-}
-
-/* ===== Empty ===== */
+/* ========= Empty states ========= */
 .empty{
   padding: 14px;
   border-radius: var(--radius-lg);
   border: 1px dashed rgba(11,18,32,.18);
   background: rgba(255,255,255,.60);
-  color: rgba(11,18,32,.62);
-  font-weight: 800;
-}
-
-/* ===== Small code badge for UI numbering (01,02) or IDs ===== */
-.codeBadge{
-  display:inline-flex;
-  align-items:center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(17,17,17,.12);
-  background: rgba(17,17,17,.06);
-  color: rgba(11,18,32,.75);
-  font-size: 12px;
+  color: rgba(11,18,32,.70);
   font-weight: 900;
 }
 
-/* Footer note */
-.foot{
-  font-size: 12px;
-  color: rgba(11,18,32,.60);
-  padding: 0 2px;
-  line-height: 1.4;
+/* ========= Messages / Errors ========= */
+.msg{
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--dangerStroke);
+  background: var(--dangerBg);
+  color: rgba(160, 21, 26, .95);
+  font-weight: 950;
 }
