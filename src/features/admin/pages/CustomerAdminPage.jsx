@@ -78,6 +78,31 @@ async function loadHistory(customerId, limit = 120) {
   return rows.slice(0, limit);
 }
 
+/**
+ * Find duplicates by phone/email across all customers.
+ * - phoneDigits: digits only (required in your UX)
+ * - emailLower: lowercased (optional)
+ * - excludeId: ignore this id (for edit)
+ */
+async function findDuplicates({ phoneDigits, emailLower, excludeId }) {
+  const phone = onlyDigits(phoneDigits);
+  const email = String(emailLower || "").trim().toLowerCase();
+
+  const all = await db.customers.toArray().catch(() => []);
+  return (all || []).filter((c) => {
+    if (!c) return false;
+    if (excludeId && c.id === excludeId) return false;
+
+    const p = onlyDigits(c.phone || "");
+    const e = String(c.email || "").trim().toLowerCase();
+
+    const phoneMatch = phone && p && p === phone;
+    const emailMatch = email && e && e === email;
+
+    return phoneMatch || emailMatch;
+  });
+}
+
 export default function CustomerAdminPage() {
   const nav = useNavigate();
 
@@ -151,8 +176,9 @@ export default function CustomerAdminPage() {
     if (!q) return rows;
 
     return rows.filter((c) => {
+      const wantGroups2 = tab === "groups";
       const hay = [
-        wantGroups ? groupTitle(c) : safeName(c),
+        wantGroups2 ? groupTitle(c) : safeName(c),
         c.phone,
         c.email,
         c.instagram,
@@ -167,7 +193,7 @@ export default function CustomerAdminPage() {
     });
   }, [customers, query, tab]);
 
-  /** ---------- Open modal ---------- */
+  /** ---------- View/Edit modal ---------- */
   async function openCustomer(c) {
     if (!c) return;
 
@@ -221,6 +247,7 @@ export default function CustomerAdminPage() {
   function openCreate() {
     setCreateMode("profile");
     setNote("");
+
     setProfile({
       fullName: "",
       phone: "",
@@ -230,6 +257,7 @@ export default function CustomerAdminPage() {
       city: "",
       marketingConsent: false,
     });
+
     setGroup({
       title: "Hochzeit",
       contactName: "",
@@ -242,6 +270,7 @@ export default function CustomerAdminPage() {
       marketingConsent: false,
       note: "",
     });
+
     setMembers([{ displayName: "Braut", phone: "" }]);
     setCreateOpen(true);
   }
@@ -253,9 +282,11 @@ export default function CustomerAdminPage() {
   function addMember() {
     setMembers((p) => [...p, { displayName: "", phone: "" }]);
   }
+
   function updateMember(i, patch) {
     setMembers((p) => p.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
   }
+
   function removeMember(i) {
     setMembers((p) => p.filter((_, idx) => idx !== i));
   }
@@ -295,28 +326,26 @@ export default function CustomerAdminPage() {
   }, [createMode, profile, group, members]);
 
   const createValid = useMemo(() => Object.keys(createErrors).length === 0, [createErrors]);
+
   async function saveNewCustomer() {
     if (!createValid) return;
 
     const now = new Date().toISOString();
 
-    // --- Prepare data for duplicate check ---
-    const phoneToCheck = onlyDigits(createMode === "profile" ? profile.phone : wedding.phone);
-    const emailToCheck = String(createMode === "profile" ? profile.email : wedding.email).trim().toLowerCase();
+    const phoneToCheck = onlyDigits(createMode === "profile" ? profile.phone : group.phone);
+    const emailToCheck = String(createMode === "profile" ? profile.email : group.email)
+      .trim()
+      .toLowerCase();
 
-    // --- Check for duplicates in DB ---
-    const existing = await db.customers
-      .filter(c => {
-        const phoneMatch = onlyDigits(c.phone) === phoneToCheck;
-        const emailMatch =
-          emailToCheck && (c.email || "").trim().toLowerCase() === emailToCheck; // فقط لو فيه إيميل
-        return phoneMatch || emailMatch;
-      })
-      .toArray()
-      .catch(() => []);
+    // Prevent duplicates (phone always; email only if provided)
+    const dup = await findDuplicates({
+      phoneDigits: phoneToCheck,
+      emailLower: emailToCheck,
+      excludeId: "",
+    });
 
-    if (existing.length > 0) {
-      alert("Kunde mit dieser Telefonnummer oder E-Mail existiert bereits.");
+    if (dup.length > 0) {
+      alert("Kunde/Gruppe mit dieser Telefonnummer oder E-Mail existiert bereits.");
       return;
     }
 
@@ -366,20 +395,22 @@ export default function CustomerAdminPage() {
     if (createMode === "group") {
       const title = group.title.trim();
       const contactName = group.contactName.trim();
+      const { firstName, lastName } = splitFullName(contactName);
 
       const row = {
         id: crypto.randomUUID(),
         createdAt: now,
         updatedAt: now,
-        ...splitFullName(wedding.contactName.trim()),
+        firstName,
+        lastName,
         phone: phoneToCheck,
         email: emailToCheck,
-        instagram: "",
-        marketingConsent: !!wedding.marketingConsent,
+        instagram: normalizeInstagram(group.instagram),
+        marketingConsent: !!group.marketingConsent,
         lastVisitAt: "",
         lastServedByStaffId: "",
         lastServedByStaffName: "",
-        displayName: title,
+        displayName: title, // show Hochzeit title in list
         address: {
           street: (group.street || "").trim(),
           city: (group.city || "").trim(),
@@ -421,17 +452,112 @@ export default function CustomerAdminPage() {
     setCreateOpen(false);
   }
 
-
-
+  /** ---------- Delete ---------- */
   async function deleteCustomer(id) {
     if (!id) return;
-    // optional: hier könntest du prüfen ob Visits existieren, sonst löschen
+
     await db.customers.delete(id);
-    // history cleanup
+
     const hist = await db.customer_history.where("customerId").equals(id).toArray().catch(() => []);
     await Promise.all(hist.map((h) => db.customer_history.delete(h.id)));
+
     await reload();
     closeView();
+  }
+
+  async function deleteSelected() {
+    if (!selected?.id) return;
+    const ok = confirm("Wirklich löschen?");
+    if (!ok) return;
+    await deleteCustomer(selected.id);
+  }
+
+  /** ---------- Duplicate check for edit ---------- */
+  async function ensureNoDuplicatesBeforeSave(row) {
+    const phoneDigits = onlyDigits(row.phone || "");
+    const emailLower = String(row.email || "").trim().toLowerCase();
+
+    if (phoneDigits.length < 6) {
+      alert("Bitte eine gültige Telefonnummer eingeben (min. 6 Ziffern).");
+      return false;
+    }
+
+    const dup = await findDuplicates({
+      phoneDigits,
+      emailLower,
+      excludeId: row.id,
+    });
+
+    if (dup.length > 0) {
+      alert("Telefonnummer oder E-Mail existiert bereits bei einem anderen Kunden/Gruppe.");
+      return false;
+    }
+
+    return true;
+  }
+
+  /** ---------- Save Edit (view/edit modal) ---------- */
+  async function saveEdit() {
+    if (!editRow?.id) return;
+
+    // Basic validation
+    if (!isValidEmail(editRow.email)) {
+      alert("Bitte gültige E-Mail eingeben.");
+      return;
+    }
+    if (!isValidInstagramHandle(editRow.instagram)) {
+      alert("Bitte gültigen Instagram-Handle eingeben.");
+      return;
+    }
+
+    // prevent duplicates
+    const ok = await ensureNoDuplicatesBeforeSave(editRow);
+    if (!ok) return;
+
+    const now = new Date().toISOString();
+
+    // Base patch
+    const patch = {
+      updatedAt: now,
+      displayName: String(editRow.displayName || "").trim(),
+      firstName: String(editRow.firstName || "").trim(),
+      lastName: String(editRow.lastName || "").trim(),
+      phone: onlyDigits(editRow.phone || ""),
+      email: String(editRow.email || "").trim(),
+      instagram: normalizeInstagram(editRow.instagram || ""),
+      marketingConsent: !!editRow.marketingConsent,
+      address: {
+        street: String(editRow.address?.street || "").trim(),
+        city: String(editRow.address?.city || "").trim(),
+      },
+      note: String(editRow.note || "").trim(),
+    };
+
+    // Group patch (ensure title becomes displayName)
+    if (editRow.kind === "group" && editRow.group) {
+      patch.kind = "group";
+      patch.group = {
+        title: String(editRow.group.title || "").trim(),
+        paymentMode: editRow.group.paymentMode || "single",
+        members: Array.isArray(editRow.group.members)
+          ? editRow.group.members.map((m) => ({
+              displayName: String(m.displayName || "").trim(),
+              phone: onlyDigits(m.phone || ""),
+              customerId: String(m.customerId || ""),
+            }))
+          : [],
+      };
+      patch.displayName = patch.group.title || patch.displayName;
+    } else {
+      patch.kind = "profile";
+    }
+
+    await db.customers.update(editRow.id, patch);
+
+    await reload();
+    setSelected((s) => (s && s.id === editRow.id ? { ...s, ...patch } : s));
+    setHistory(await loadHistory(editRow.id, 120));
+    setMode("view");
   }
 
   /** ---------- Member profile creation (group) ---------- */
@@ -449,13 +575,41 @@ export default function CustomerAdminPage() {
     }
 
     let phone = onlyDigits(mem.phone || "");
+    if (phone.length > 0 && phone.length < 6) {
+      alert("Telefon ist zu kurz (min. 6 Ziffern) oder leer lassen.");
+      return;
+    }
+
+    // If phone given, ensure not duplicated
+    if (phone.length >= 6) {
+      const dup = await findDuplicates({ phoneDigits: phone, emailLower: "", excludeId: "" });
+      if (dup.length > 0) {
+        alert("Diese Telefonnummer existiert bereits bei einem Kunden/Gruppe. Bitte prüfen.");
+        return;
+      }
+    }
+
+    // Fast optional prompt if phone missing (recommended, but optional)
     if (phone.length < 6) {
       const x = prompt(
-        "Telefon fehlt/zu kurz. Bitte Telefonnummer eingeben (optional, aber empfohlen):",
+        "Telefon fehlt. Optional Telefonnummer eingeben (empfohlen):",
         mem.phone || ""
       );
       if (x == null) return;
-      phone = onlyDigits(x);
+      const p = onlyDigits(x);
+      if (p && p.length < 6) {
+        alert("Telefon ist zu kurz (min. 6 Ziffern) oder leer lassen.");
+        return;
+      }
+      // check dup if provided
+      if (p.length >= 6) {
+        const dup2 = await findDuplicates({ phoneDigits: p, emailLower: "", excludeId: "" });
+        if (dup2.length > 0) {
+          alert("Diese Telefonnummer existiert bereits bei einem Kunden/Gruppe.");
+          return;
+        }
+      }
+      phone = p;
     }
 
     const now = new Date().toISOString();
@@ -484,6 +638,7 @@ export default function CustomerAdminPage() {
     const nextMembers = editRow.group.members.map((m, i) =>
       i === memberIndex ? { ...m, customerId: newCustomerId, phone } : m
     );
+
     const nextEdit = { ...editRow, group: { ...editRow.group, members: nextMembers } };
     setEditRow(nextEdit);
 
@@ -529,9 +684,11 @@ export default function CustomerAdminPage() {
     if (!ok) return;
 
     const now = new Date().toISOString();
+
     const nextMembers = editRow.group.members.map((m, i) =>
       i === memberIndex ? { ...m, customerId: "" } : m
     );
+
     const nextEdit = { ...editRow, group: { ...editRow.group, members: nextMembers } };
     setEditRow(nextEdit);
 
@@ -650,6 +807,7 @@ export default function CustomerAdminPage() {
               ) : (
                 filtered.map((c) => {
                   const isGroup = String(c.kind || "") === "group" || !!c.group;
+                  // IMPORTANT: group shows Hochzeit title
                   const rowName = isGroup ? groupTitle(c) : safeName(c);
 
                   return (
@@ -666,9 +824,7 @@ export default function CustomerAdminPage() {
                         <button
                           className={styles.dangerBtn}
                           type="button"
-                          onClick={() => {
-                            openCustomer(c);
-                          }}
+                          onClick={() => openCustomer(c)}
                         >
                           Öffnen
                         </button>
@@ -731,6 +887,7 @@ export default function CustomerAdminPage() {
 
                 if (isGroup) {
                   const membersArr = Array.isArray(e.group?.members) ? e.group.members : [];
+
                   return (
                     <>
                       <Field label="Titel" disabled={mode !== "edit"}>
@@ -770,11 +927,6 @@ export default function CustomerAdminPage() {
                             }
                           />
                         </Field>
-left={
-  <button className={styles.backBtnLeft} type="button" onClick={() => nav(-1)}>
-    ← Zurück
-  </button>
-}
 
                         <Field label="E-Mail" disabled={mode !== "edit"}>
                           <input
@@ -792,7 +944,10 @@ left={
                           value={e.instagram || ""}
                           disabled={mode !== "edit"}
                           onChange={(ev) =>
-                            setEditRow((p) => ({ ...p, instagram: normalizeInstagram(ev.target.value) }))
+                            setEditRow((p) => ({
+                              ...p,
+                              instagram: normalizeInstagram(ev.target.value),
+                            }))
                           }
                         />
                       </Field>
@@ -843,6 +998,7 @@ left={
                           ) : (
                             membersArr.map((m, idx) => {
                               const hasProfile = !!m.customerId;
+
                               return (
                                 <div key={idx} className={styles.memberRow}>
                                   <input
@@ -1024,12 +1180,7 @@ left={
             <button className={styles.btnGhost} type="button" onClick={closeCreate}>
               Abbrechen
             </button>
-            <button
-              className={styles.btnPrimary}
-              type="button"
-              onClick={saveNewCustomer}
-              disabled={!createValid}
-            >
+            <button className={styles.btnPrimary} type="button" onClick={saveNewCustomer} disabled={!createValid}>
               Speichern
             </button>
           </div>
@@ -1088,11 +1239,7 @@ left={
               />
             </Field>
 
-            <Field
-              label="Instagram (optional)"
-              hint="Handle, z. B. salon.system"
-              error={createErrors.profileInstagram}
-            >
+            <Field label="Instagram (optional)" hint="Handle, z. B. salon.system" error={createErrors.profileInstagram}>
               <input
                 className={styles.input}
                 value={profile.instagram}
@@ -1131,19 +1278,11 @@ left={
         ) : (
           <div className={styles.formGrid}>
             <Field label="Titel * (z. B. Hochzeit Anna)" error={createErrors.groupTitle}>
-              <input
-                className={styles.input}
-                value={group.title}
-                onChange={(e) => setGroup((w) => ({ ...w, title: e.target.value }))}
-              />
+              <input className={styles.input} value={group.title} onChange={(e) => setGroup((w) => ({ ...w, title: e.target.value }))} />
             </Field>
 
             <Field label="Kontakt Name *" error={createErrors.groupContact}>
-              <input
-                className={styles.input}
-                value={group.contactName}
-                onChange={(e) => setGroup((w) => ({ ...w, contactName: e.target.value }))}
-              />
+              <input className={styles.input} value={group.contactName} onChange={(e) => setGroup((w) => ({ ...w, contactName: e.target.value }))} />
             </Field>
 
             <Field label="Telefon *" hint="Nur Zahlen." error={createErrors.groupPhone}>
@@ -1157,36 +1296,19 @@ left={
             </Field>
 
             <Field label="E-Mail (optional)" error={createErrors.groupEmail}>
-              <input
-                className={styles.input}
-                type="email"
-                value={group.email}
-                onChange={(e) => setGroup((w) => ({ ...w, email: e.target.value }))}
-              />
+              <input className={styles.input} type="email" value={group.email} onChange={(e) => setGroup((w) => ({ ...w, email: e.target.value }))} />
             </Field>
 
             <Field label="Instagram (optional)">
-              <input
-                className={styles.input}
-                value={group.instagram}
-                onChange={(e) => setGroup((w) => ({ ...w, instagram: normalizeInstagram(e.target.value) }))}
-              />
+              <input className={styles.input} value={group.instagram} onChange={(e) => setGroup((w) => ({ ...w, instagram: normalizeInstagram(e.target.value) }))} />
             </Field>
 
             <Field label="Straße (optional)">
-              <input
-                className={styles.input}
-                value={group.street}
-                onChange={(e) => setGroup((w) => ({ ...w, street: e.target.value }))}
-              />
+              <input className={styles.input} value={group.street} onChange={(e) => setGroup((w) => ({ ...w, street: e.target.value }))} />
             </Field>
 
             <Field label="Stadt (optional)">
-              <input
-                className={styles.input}
-                value={group.city}
-                onChange={(e) => setGroup((w) => ({ ...w, city: e.target.value }))}
-              />
+              <input className={styles.input} value={group.city} onChange={(e) => setGroup((w) => ({ ...w, city: e.target.value }))} />
             </Field>
 
             <div className={styles.payRow}>
@@ -1274,10 +1396,8 @@ left={
         </div>
       </Modal>
     </AdminShell>
-    
   );
 }
-
 
 function Field({ label, hint, error, disabled, children }) {
   return (
@@ -1289,7 +1409,5 @@ function Field({ label, hint, error, disabled, children }) {
       {children}
       {error ? <div className={styles.error}>{error}</div> : null}
     </label>
-    
   );
-  
 }
