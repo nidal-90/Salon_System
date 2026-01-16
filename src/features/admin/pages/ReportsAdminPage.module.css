@@ -1,11 +1,21 @@
+/* Responsive hardened version (no color/design change) */
+
+/* Page spacing: allow smaller padding on small devices */
 .page{
   padding: 18px;
 }
+@media (max-width: 720px){
+  .page{ padding: 12px; }
+}
+
 .shell{
   max-width: 1180px;
   margin: 0 auto;
+  min-width: 0;
 }
 
+/* ---------- TOP BAR ---------- */
+/* Key: allow wrap + keep controls aligned + avoid overflow */
 .top{
   display:flex;
   align-items:flex-end;
@@ -17,6 +27,9 @@
   background: rgba(255,255,255,.80);
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow);
+
+  flex-wrap: wrap;     /* IMPORTANT */
+  min-width: 0;
 }
 
 .h1{
@@ -24,18 +37,29 @@
   font-size: 22px;
   font-weight: 950;
   color: var(--text-strong);
+
+  overflow-wrap: anywhere;
 }
 .sub{
   margin-top: 4px;
   font-size: 13px;
   color: var(--muted);
+
+  overflow-wrap: anywhere;
 }
 
+/* Controls: keep side-by-side when possible, wrap gracefully */
 .controls{
   display:flex;
   gap: 10px;
   align-items:flex-end;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+
+  min-width: 0;
 }
+
+/* Make each label block able to shrink */
 .fLabel{
   display:flex;
   flex-direction:column;
@@ -45,7 +69,11 @@
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: .06em;
+
+  min-width: 0;
 }
+
+/* Input: avoid fixed widths; keep readable and responsive */
 .input{
   border: 1px solid var(--border);
   background: rgba(255,255,255,.85);
@@ -54,10 +82,41 @@
   border-radius: 14px;
   outline: none;
   font-weight: 800;
+
+  width: min(220px, 100%);
+  min-width: 160px;
+  max-width: 100%;
 }
 .input:focus{
   border-color: rgba(31,123,242,.45);
   box-shadow: 0 0 0 4px rgba(31,123,242,.10);
+}
+
+@media (max-width: 720px){
+  /* tighter header without changing style */
+  .top{
+    padding: 12px;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .h1{ font-size: 18px; }
+  .sub{ font-size: 12px; }
+
+  /* keep "Datum" + "USB" next to each other if there are 2 controls */
+  .controls{
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .fLabel{
+    flex: 1 1 160px;          /* two per row when space allows */
+  }
+  .input{
+    width: 100%;
+    min-width: 0;
+    padding: 9px 10px;
+    border-radius: 12px;
+  }
 }
 
 .alertErr{
@@ -68,13 +127,18 @@
   padding: 10px 12px;
   border-radius: 14px;
   font-weight: 800;
+
+  min-width: 0;
 }
 
+/* ---------- KPI GRID ---------- */
 .kpis{
   display:grid;
   grid-template-columns: repeat(4, minmax(0,1fr));
   gap: 12px;
   margin-top: 12px;
+
+  min-width: 0;
 }
 @media (max-width: 980px){
   .kpis{ grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -90,7 +154,13 @@
   padding: 14px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
+
+  min-width: 0;
 }
+@media (max-width: 720px){
+  .kpi{ padding: 12px; }
+}
+
 .kpiLabel{
   font-size: 11px;
   letter-spacing: .06em;
@@ -104,6 +174,9 @@
   font-weight: 950;
   color: var(--text-strong);
 }
+@media (max-width: 720px){
+  .kpiVal{ font-size: 20px; }
+}
 .kpiMeta{
   margin-top: 2px;
   font-size: 12px;
@@ -111,11 +184,14 @@
   font-weight: 800;
 }
 
+/* ---------- MAIN GRID ---------- */
 .grid{
   display:grid;
   grid-template-columns: 1.2fr .9fr;
   gap: 12px;
   margin-top: 12px;
+
+  min-width: 0;
 }
 @media (max-width: 980px){
   .grid{ grid-template-columns: 1fr; }
@@ -128,12 +204,19 @@
   padding: 14px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
+
+  min-width: 0;
+}
+@media (max-width: 720px){
+  .card{ padding: 12px; }
 }
 
 .cardTitle{
   font-weight: 950;
   color: var(--text-strong);
   margin-bottom: 10px;
+
+  overflow-wrap: anywhere;
 }
 .cardHeadRow{
   display:flex;
@@ -141,15 +224,25 @@
   justify-content:space-between;
   gap: 10px;
   margin-bottom: 10px;
+
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
+/* ---------- TABLE WRAP ---------- */
+/* Key fix: let table scroll on small screens instead of breaking layout */
 .table{
   border: 1px solid rgba(15,23,42,.08);
   border-radius: 16px;
-  overflow: hidden;
+  overflow: auto; /* was hidden; allow scroll if needed */
   background: rgba(255,255,255,.65);
+
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  min-width: 0;
 }
 
+/* Heads */
 .trHeadStaff, .trHeadItem{
   display:grid;
   gap: 10px;
@@ -161,14 +254,13 @@
   font-size: 11px;
   letter-spacing: .06em;
   text-transform: uppercase;
-}
-.trHeadStaff{
-  grid-template-columns: 1.2fr .6fr .6fr .7fr;
-}
-.trHeadItem{
-  grid-template-columns: 1.2fr .6fr .7fr;
-}
 
+  min-width: 0;
+}
+.trHeadStaff{ grid-template-columns: 1.2fr .6fr .6fr .7fr; }
+.trHeadItem{ grid-template-columns: 1.2fr .6fr .7fr; }
+
+/* Rows */
 .trItem{
   display:grid;
   grid-template-columns: 1.2fr .6fr .7fr;
@@ -176,10 +268,10 @@
   padding: 10px 12px;
   border-bottom: 1px solid rgba(15,23,42,.06);
   color: var(--text);
+
+  min-width: 0;
 }
-.trItem:last-child{
-  border-bottom: none;
-}
+.trItem:last-child{ border-bottom: none; }
 
 .trStaffBtn{
   width:100%;
@@ -193,14 +285,35 @@
   color: var(--text);
   text-align:left;
   cursor:pointer;
+
+  min-width: 0;
 }
-.trStaffBtn:hover{
-  background: rgba(31,123,242,.06);
-}
-.trStaffBtn:last-child{
-  border-bottom: none;
+.trStaffBtn:hover{ background: rgba(31,123,242,.06); }
+.trStaffBtn:last-child{ border-bottom: none; }
+
+/* Mobile: reduce density + make row single-column if needed */
+@media (max-width: 720px){
+  .trHeadStaff, .trHeadItem{
+    font-size: 10px;
+    padding: 10px;
+  }
+
+  .trHeadStaff, .trStaffBtn{
+    grid-template-columns: 1fr;   /* stack */
+    gap: 6px;
+  }
+
+  .trHeadItem, .trItem{
+    grid-template-columns: 1fr;   /* stack */
+    gap: 6px;
+  }
+
+  .trItem, .trStaffBtn{
+    padding: 10px;
+  }
 }
 
+/* Text helpers */
 .taRight{ text-align:right; }
 .bold{ font-weight: 950; color: var(--text-strong); }
 .muted{ color: var(--muted); font-weight: 800; }
@@ -211,9 +324,7 @@
   font-weight: 900;
 }
 
-.sep{
-  height: 10px;
-}
+.sep{ height: 10px; }
 
 .note{
   margin-top: 10px;
@@ -222,7 +333,7 @@
   font-weight: 800;
 }
 
-/* Modal */
+/* ---------- MODAL ---------- */
 .modalOverlay{
   position: fixed;
   inset: 0;
@@ -234,6 +345,10 @@
   padding: 18px;
   z-index: 50;
 }
+@media (max-width: 720px){
+  .modalOverlay{ padding: 12px; }
+}
+
 .modal{
   width: min(980px, 100%);
   border-radius: 18px;
@@ -241,7 +356,10 @@
   background: rgba(255,255,255,.92);
   box-shadow: 0 22px 60px rgba(0,0,0,.25);
   overflow: hidden;
+
+  min-width: 0;
 }
+
 .modalHeader{
   display:flex;
   align-items:flex-start;
@@ -249,18 +367,28 @@
   gap: 10px;
   padding: 14px 14px 10px 14px;
   border-bottom: 1px solid rgba(15,23,42,.08);
+
+  min-width: 0;
 }
 .modalTitle{
   font-weight: 950;
   color: var(--text-strong);
   font-size: 18px;
+
+  overflow-wrap: anywhere;
+}
+@media (max-width: 720px){
+  .modalTitle{ font-size: 16px; }
 }
 .modalSub{
   margin-top: 2px;
   color: var(--muted);
   font-weight: 850;
   font-size: 12px;
+
+  overflow-wrap: anywhere;
 }
+
 .closeBtn{
   border: 1px solid rgba(15,23,42,.12);
   background: rgba(255,255,255,.85);
@@ -270,43 +398,58 @@
   border-radius: 14px;
   cursor:pointer;
   font-weight: 950;
+
+  flex: 0 0 auto;
 }
-.closeBtn:hover{
-  background: rgba(255,255,255,.98);
-}
+.closeBtn:hover{ background: rgba(255,255,255,.98); }
 
 .modalBody{
   padding: 14px;
+  min-width: 0;
 }
+@media (max-width: 720px){
+  .modalBody{ padding: 12px; }
+}
+
 .modalGrid{
   display:grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+  min-width: 0;
 }
 @media (max-width: 980px){
   .modalGrid{ grid-template-columns: 1fr; }
 }
+
 .modalPanel{
   border: 1px solid rgba(15,23,42,.10);
   border-radius: 16px;
   background: rgba(255,255,255,.70);
   overflow:hidden;
+
+  min-width: 0;
 }
 .modalPanelTitle{
   padding: 10px 12px;
   font-weight: 950;
   color: var(--text-strong);
   border-bottom: 1px solid rgba(15,23,42,.08);
+
+  overflow-wrap: anywhere;
 }
 .emptyBox{
   padding: 12px;
   color: var(--muted);
   font-weight: 900;
 }
+
+/* Detail table: allow horizontal scroll if content forces it */
 .detailTable{
   display:flex;
   flex-direction:column;
+  min-width: 0;
 }
+
 .detailHead{
   display:grid;
   grid-template-columns: 1.2fr 1.2fr .6fr;
@@ -319,6 +462,8 @@
   font-size: 11px;
   letter-spacing: .06em;
   text-transform: uppercase;
+
+  min-width: 0;
 }
 .detailRow{
   display:grid;
@@ -326,15 +471,26 @@
   gap: 10px;
   padding: 10px 12px;
   border-bottom: 1px solid rgba(15,23,42,.06);
+
+  min-width: 0;
 }
-.detailRow:last-child{
-  border-bottom:none;
+.detailRow:last-child{ border-bottom:none; }
+
+@media (max-width: 720px){
+  .detailHead{ display:none; }
+  .detailRow{
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
 }
 
 .modalFooter{
   display:flex;
   justify-content:flex-end;
   padding: 10px 14px 14px 14px;
+
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .btnGhost{
@@ -345,10 +501,10 @@
   border-radius: 14px;
   cursor:pointer;
   font-weight: 950;
+
+  white-space: nowrap;
 }
-.btnGhost:hover{
-  background: rgba(255,255,255,.98);
-}
+.btnGhost:hover{ background: rgba(255,255,255,.98); }
 
 .smallMuted{
   color: var(--muted);

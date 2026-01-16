@@ -1,4 +1,5 @@
 /* src/features/admin/pages/CustomerAdminPage.module.css */
+/* Responsive hardening without changing visual design (colors/feel) */
 
 /* ---------- Top tools / pills ---------- */
 .rightTools{
@@ -6,9 +7,19 @@
   gap:10px;
   align-items:center;
   flex-wrap:wrap;
+
+  min-width: 0;
 }
 
-.searchWrap{ min-width: 240px; }
+.searchWrap{
+  /* keep original intent, but allow shrink on small screens */
+  min-width: 240px;
+  max-width: 100%;
+  flex: 1 1 280px;
+
+  min-width: 0;
+}
+
 .search{
   height:40px;
   border-radius:14px;
@@ -16,7 +27,11 @@
   background: rgba(255,255,255,.70);
   padding:0 12px;
   outline:none;
-  width: 280px;
+
+  /* was: width:280px; -> responsive */
+  width: min(280px, 100%);
+  min-width: 180px;
+
   color: rgba(0,0,0,.88);
 }
 .search:focus{
@@ -24,7 +39,14 @@
   box-shadow: 0 0 0 4px rgba(0,0,0,.08);
 }
 
-.tabPills{ display:flex; gap:8px; }
+.tabPills{
+  display:flex;
+  gap:8px;
+  flex-wrap: wrap;
+
+  min-width: 0;
+}
+
 .pill{
   border:1px solid rgba(0,0,0,.10);
   background: rgba(255,255,255,.75);
@@ -33,6 +55,8 @@
   font-weight: 800;
   cursor: pointer;
   color: rgba(0,0,0,.78);
+
+  white-space: nowrap;
 }
 .pillActive{
   background: rgba(0,0,0,.88);
@@ -50,6 +74,8 @@
   font-weight: 900;
   cursor:pointer;
   color: rgba(0,0,0,.86);
+
+  white-space: nowrap;
 }
 .backBtnLeft:hover{ background: rgba(255,255,255,.92); }
 
@@ -61,6 +87,8 @@
   padding: 14px;
   box-shadow: var(--shadow, 0 18px 50px rgba(0,0,0,.10));
   backdrop-filter: blur(14px);
+
+  min-width: 0; /* critical */
 }
 
 .head{
@@ -69,10 +97,31 @@
   align-items:flex-start;
   gap:12px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
+
+  min-width: 0;
 }
-.headLeft{ display:flex; flex-direction:column; gap:4px; }
-.title{ font-weight: 950; font-size: 22px; letter-spacing: -0.02em; color: rgba(0,0,0,.88); }
-.sub{ font-size: 13px; color: rgba(0,0,0,.55); }
+.headLeft{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+
+  min-width: 0;
+}
+
+.title{
+  font-weight: 950;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: rgba(0,0,0,.88);
+
+  overflow-wrap: anywhere;
+}
+.sub{
+  font-size: 13px;
+  color: rgba(0,0,0,.55);
+  overflow-wrap: anywhere;
+}
 
 .tableWrap{
   margin-top: 10px;
@@ -80,17 +129,24 @@
   border-radius: 16px;
   border: 1px solid rgba(0,0,0,.06);
   background: rgba(255,255,255,.55);
+
+  -webkit-overflow-scrolling: touch;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .table{
   width: 100%;
   border-collapse: collapse;
+
+  /* keep desktop readability, but wrapper scroll handles it */
   min-width: 920px;
 }
 .table th, .table td{
   padding: 12px;
   border-bottom: 1px solid rgba(0,0,0,.06);
   text-align: left;
+  vertical-align: middle;
 }
 .table th{
   font-size: 12px;
@@ -99,11 +155,14 @@
   color: rgba(0,0,0,.62);
   font-weight: 900;
 }
+
 .right{ text-align:right; }
+
 .row{ cursor:pointer; }
 .row:hover{ background: rgba(0,0,0,.03); }
 
 .nameCell{ font-weight: 950; }
+
 .tag{
   margin-left: 10px;
   display:inline-flex;
@@ -116,6 +175,8 @@
   color: rgba(0,0,0,.70);
   font-size: 12px;
   font-weight: 900;
+
+  white-space: nowrap;
 }
 
 .muted{ color: rgba(0,0,0,.55); font-size: 13px; }
@@ -135,6 +196,8 @@
   background: rgba(0,0,0,.90);
   color: #fff;
   box-shadow: 0 10px 22px rgba(0,0,0,.14);
+
+  white-space: nowrap;
 }
 .btnPrimary:hover{ background: rgba(0,0,0,.96); }
 .btnPrimary:disabled{ opacity:.55; cursor:not-allowed; }
@@ -147,6 +210,8 @@
   cursor: pointer;
   background: rgba(255,255,255,.85);
   color: rgba(0,0,0,.86);
+
+  white-space: nowrap;
 }
 .btnGhost:hover{ background: rgba(255,255,255,.95); }
 
@@ -158,6 +223,8 @@
   padding: 10px 14px;
   font-weight: 950;
   cursor: pointer;
+
+  white-space: nowrap;
 }
 .btnDanger:hover{ background: rgba(180,35,24,.10); }
 
@@ -170,6 +237,8 @@
   font-weight: 900;
   cursor: pointer;
   color: rgba(0,0,0,.80);
+
+  white-space: nowrap;
 }
 
 /* ---------- Modals layout ---------- */
@@ -179,6 +248,8 @@
   justify-content:flex-end;
   width:100%;
   flex-wrap:wrap;
+
+  min-width: 0;
 }
 
 .modalGrid{
@@ -186,6 +257,8 @@
   grid-template-columns: 1.15fr 0.85fr;
   gap: 12px;
   align-items: stretch;
+
+  min-width: 0;
 }
 @media (max-width: 980px){
   .modalGrid{ grid-template-columns: 1fr; }
@@ -196,17 +269,22 @@
   border-radius: 16px;
   background: rgba(255,255,255,.80);
   padding: 12px;
+
+  /* keep content from forcing width */
   overflow: hidden;
+  min-width: 0;
 }
 
 .boxTitle{
   font-weight: 950;
   color: rgba(0,0,0,.86);
+  overflow-wrap: anywhere;
 }
 .boxSub{
   margin-top: 3px;
   font-size: 12px;
   color: rgba(0,0,0,.55);
+  overflow-wrap: anywhere;
 }
 
 .hist{
@@ -217,26 +295,35 @@
   max-height: 360px;
   overflow: auto;
   padding-right: 6px;
+
+  min-width: 0;
 }
 .histRow{
   border: 1px solid rgba(0,0,0,.08);
   border-radius: 14px;
   background: rgba(255,255,255,.72);
   padding: 10px;
+
+  min-width: 0;
 }
 .histTop{
   display:flex;
   justify-content:space-between;
   gap:10px;
   align-items:flex-start;
+
+  min-width: 0;
 }
 .histTitle{
   font-weight: 950;
   color: rgba(0,0,0,.82);
   font-size: 13px;
+
   white-space: nowrap;
   overflow:hidden;
   text-overflow: ellipsis;
+
+  min-width: 0;
 }
 .histTime{
   font-size: 12px;
@@ -247,6 +334,7 @@
   margin-top: 4px;
   font-size: 12px;
   color: rgba(0,0,0,.55);
+  overflow-wrap: anywhere;
 }
 .empty2{
   padding: 12px;
@@ -262,12 +350,15 @@
   flex-direction:column;
   gap:6px;
   margin-top: 10px;
+
+  min-width: 0;
 }
 
 .labelRow{
   display:flex;
   justify-content:space-between;
   gap:10px;
+  min-width: 0;
 }
 .label{
   font-weight: 900;
@@ -283,6 +374,9 @@
   outline: none;
   color: rgba(0,0,0,.88);
   font-weight: 700;
+
+  width: 100%;
+  min-width: 0;
 }
 .input:focus{
   border-color: rgba(0,0,0,.20);
@@ -299,6 +393,8 @@
   display:grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+
+  min-width: 0;
 }
 @media (max-width: 720px){
   .twoCol{ grid-template-columns: 1fr; }
@@ -313,6 +409,9 @@
   border-radius: 12px;
   background: rgba(0,0,0,.03);
   border: 1px solid rgba(0,0,0,.06);
+
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 /* ---------- Create tabs ---------- */
@@ -320,6 +419,9 @@
   display:flex;
   gap:8px;
   margin-bottom:12px;
+  flex-wrap: wrap;
+
+  min-width: 0;
 }
 .tabBtn{
   border: 1px solid rgba(0,0,0,.10);
@@ -329,6 +431,8 @@
   font-weight: 900;
   cursor:pointer;
   color: rgba(0,0,0,.78);
+
+  white-space: nowrap;
 }
 .tabBtnActive{
   background: rgba(0,0,0,.88);
@@ -340,6 +444,8 @@
   display:grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+
+  min-width: 0;
 }
 @media (max-width: 900px){
   .formGrid{ grid-template-columns: 1fr; }
@@ -357,6 +463,9 @@
   border-radius: 12px;
   background: rgba(0,0,0,.03);
   border: 1px solid rgba(0,0,0,.06);
+
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .payLabel{ font-weight: 900; margin-right: 6px; }
 .pillSm{
@@ -366,6 +475,8 @@
   padding: 6px 10px;
   font-weight: 900;
   cursor:pointer;
+
+  white-space: nowrap;
 }
 .pillSmActive{
   background: rgba(0,0,0,.88);
@@ -380,12 +491,18 @@
   background: rgba(255,255,255,.65);
   border-radius: 14px;
   padding: 10px;
+
+  min-width: 0;
 }
 .membersHead{
   display:flex;
   justify-content:space-between;
   align-items:center;
   margin-bottom:8px;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  min-width: 0;
 }
 .btnSmall{
   border: 1px solid rgba(0,0,0,.10);
@@ -394,6 +511,8 @@
   padding: 6px 10px;
   font-weight: 900;
   cursor:pointer;
+
+  white-space: nowrap;
 }
 
 .memberRowCreate{
@@ -402,11 +521,18 @@
   gap: 10px;
   align-items: start;
   margin-bottom: 10px;
+
+  min-width: 0;
 }
 @media (max-width: 900px){
   .memberRowCreate{ grid-template-columns: 1fr; }
 }
-.memberCol{ display:flex; flex-direction:column; gap:6px; }
+.memberCol{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width: 0;
+}
 
 .danger{
   border: 1px solid rgba(180,35,24,.25);
@@ -416,6 +542,8 @@
   padding: 10px 12px;
   font-weight: 950;
   cursor: pointer;
+
+  white-space: nowrap;
 }
 
 /* ---------- Members (Edit/View in modal) ---------- */
@@ -425,15 +553,29 @@
   background: rgba(255,255,255,.70);
   border-radius: 14px;
   padding: 10px;
+
+  min-width: 0;
 }
-.membersTitle{ font-weight: 950; color: rgba(0,0,0,.84); }
-.membersSub{ font-size: 12px; color: rgba(0,0,0,.55); margin-top: 2px; }
+.membersTitle{
+  font-weight: 950;
+  color: rgba(0,0,0,.84);
+  overflow-wrap: anywhere;
+}
+.membersSub{
+  font-size: 12px;
+  color: rgba(0,0,0,.55);
+  margin-top: 2px;
+
+  overflow-wrap: anywhere;
+}
 
 .memberList{
   margin-top: 10px;
   display:flex;
   flex-direction:column;
   gap: 10px;
+
+  min-width: 0;
 }
 
 .memberRow{
@@ -441,6 +583,8 @@
   grid-template-columns: 1fr 1fr 260px;
   gap: 10px;
   align-items: center;
+
+  min-width: 0;
 }
 @media (max-width: 980px){
   .memberRow{ grid-template-columns: 1fr; }
@@ -452,6 +596,8 @@
   justify-content:flex-end;
   align-items:center;
   flex-wrap:wrap;
+
+  min-width: 0;
 }
 
 .btnPrimarySm{
@@ -463,6 +609,8 @@
   color:#fff;
   font-weight: 950;
   cursor:pointer;
+
+  white-space: nowrap;
 }
 .btnNeutralSm{
   height: 40px;
@@ -472,6 +620,8 @@
   background: rgba(255,255,255,.86);
   color: rgba(0,0,0,.70);
   font-weight: 950;
+
+  white-space: nowrap;
 }
 .btnDangerSm{
   height: 40px;
@@ -482,4 +632,29 @@
   color: #b42318;
   font-weight: 950;
   cursor:pointer;
+
+  white-space: nowrap;
+}
+
+/* ---------- Mobile adjustments (no design change, only sizing/wrapping) ---------- */
+@media (max-width: 720px){
+  .searchWrap{
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+  .search{
+    width: 100%;
+    min-width: 0;
+  }
+  .tabPills{ width: 100%; }
+
+  .head{ gap: 10px; }
+  .title{ font-size: 20px; }
+  .sub{ font-size: 12px; }
+
+  /* If your layout uses rightTools inside header: ensure it doesn't push */
+  .rightTools{
+    width: 100%;
+    justify-content: flex-start;
+  }
 }

@@ -1,13 +1,16 @@
 /* src/features/admin/pages/VoucherAdminPage.module.css */
-/* Premium graphite – no blue */
+/* Responsive hardened (NO color/design change; only layout/size stability) */
 
-/* NEW: top tools container like Customers (left home / right tools) */
+/* ---------- Top tools container (left home / right tools) ---------- */
 .topTools{
   width: 100%;
   display:flex;
   align-items:center;
-  justify-content: space-between; /* key */
+  justify-content: space-between;
   gap: 12px;
+
+  flex-wrap: wrap;   /* IMPORTANT */
+  min-width: 0;
 }
 
 .topLeft{
@@ -15,6 +18,7 @@
   align-items:center;
   gap:10px;
   flex: 0 0 auto;
+  min-width: 0;
 }
 
 .topRight{
@@ -24,9 +28,19 @@
   gap:10px;
   flex: 1 1 auto;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
-/* keep existing */
+/* Mobile: tools stack and align left to avoid “schief” spacing */
+@media (max-width: 720px){
+  .topTools{ gap: 10px; }
+  .topRight{
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* ---------- Buttons (keep existing look; ensure no stretch/overflow) ---------- */
 .backBtn{
   display:inline-flex;
   align-items:center;
@@ -40,11 +54,25 @@
   font-weight:900;
   cursor:pointer;
   white-space: nowrap;
+
+  width: auto;
+  min-width: 0;
 }
 .backBtn:hover{ background: rgba(0,0,0,.92); }
 .backIcon{ font-size:16px; line-height:1; opacity:.95; }
 
-.searchBox{ display:flex; align-items:center; }
+.primaryBtn,
+.secondaryBtn,
+.ghostBtn,
+.dangerBtn{
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+/* ---------- Search / Select ---------- */
+.searchBox{ display:flex; align-items:center; min-width: 0; }
 .search{
   height:40px;
   width:min(420px, 52vw);
@@ -53,10 +81,23 @@
   background: rgba(255,255,255,.70);
   padding:0 12px;
   outline:none;
+
+  max-width: 100%;
+  min-width: 200px;
 }
 .search:focus{
   border-color: rgba(0,0,0,.22);
   box-shadow: 0 0 0 4px rgba(0,0,0,.08);
+}
+
+/* On very small screens: let search take full row if needed */
+@media (max-width: 720px){
+  .search{
+    width: 100%;
+    min-width: 0;
+    height: 38px;
+    border-radius: 12px;
+  }
 }
 
 .select{
@@ -67,8 +108,24 @@
   padding:0 10px;
   outline:none;
   font-weight:900;
+
+  max-width: 100%;
 }
 
+/* Slightly tighter controls on small screens */
+@media (max-width: 720px){
+  .select,
+  .primaryBtn,
+  .secondaryBtn,
+  .ghostBtn,
+  .dangerBtn,
+  .backBtn{
+    height: 38px;
+    border-radius: 12px;
+  }
+}
+
+/* ---------- Existing buttons ---------- */
 .primaryBtn{
   height:40px;
   padding:0 14px;
@@ -78,7 +135,6 @@
   color:#fff;
   font-weight:900;
   cursor:pointer;
-  white-space: nowrap;
 }
 .primaryBtn:hover{ background: rgba(0,0,0,.95); }
 
@@ -116,10 +172,12 @@
   cursor:pointer;
 }
 
+/* ---------- KPI Grid (already responsive; add shrink safety) ---------- */
 .grid{
   display:grid;
   grid-template-columns: repeat(4, minmax(0,1fr));
   gap:12px;
+  min-width: 0;
 }
 @media (max-width: 1100px){
   .grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -135,11 +193,19 @@
   padding: 14px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
-}
-.kpiLabel{ color: var(--muted); font-weight: 900; }
-.kpiVal{ margin-top: 6px; font-size: 26px; font-weight: 950; color: var(--text-strong); }
-.kpiMeta{ margin-top: 2px; font-size: 12px; color: var(--muted); }
 
+  min-width: 0;
+}
+.kpiLabel{ color: var(--muted); font-weight: 900; overflow-wrap: anywhere; }
+.kpiVal{ margin-top: 6px; font-size: 26px; font-weight: 950; color: var(--text-strong); overflow-wrap: anywhere; }
+.kpiMeta{ margin-top: 2px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+
+@media (max-width: 720px){
+  .kpi{ padding: 12px; }
+  .kpiVal{ font-size: 22px; }
+}
+
+/* ---------- Panels ---------- */
 .panelWide{
   grid-column: 1 / -1;
   border: 1px solid var(--border);
@@ -148,6 +214,8 @@
   padding: 14px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
+
+  min-width: 0;
 }
 
 .panelHead{
@@ -156,51 +224,66 @@
   align-items:flex-start;
   gap:10px;
   margin-bottom:10px;
-}
-.panelTitle{ font-weight:950; color: var(--text-strong); }
-.panelSub{ margin-top:3px; font-size:12px; color: var(--muted); }
 
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.panelTitle{ font-weight:950; color: var(--text-strong); overflow-wrap: anywhere; }
+.panelSub{ margin-top:3px; font-size:12px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* ---------- Table ---------- */
 .tableWrap{
   margin-top: 10px;
   overflow:auto;
   border-radius: 16px;
   border: 1px solid rgba(0,0,0,.06);
   background: rgba(255,255,255,.55);
+
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .table{
   width:100%;
   border-collapse: collapse;
-  min-width: 980px;
+  min-width: 980px; /* keeps desktop layout intact */
 }
 .table th, .table td{
   padding:12px;
   border-bottom: 1px solid rgba(0,0,0,.06);
   text-align:left;
+  vertical-align: top;
 }
 .table th{
   font-size:13px;
   color: rgba(0,0,0,.72);
   font-weight:900;
 }
+@media (max-width: 720px){
+  .table th, .table td{ padding: 10px; }
+}
+
 .right{ text-align:right; }
 .row{ cursor:pointer; }
 .row:hover{ background: rgba(0,0,0,.03); }
 
 .muted{ color: var(--muted); font-size:13px; padding:12px; }
 .muted2{ color: rgba(0,0,0,.60); font-weight:800; }
-
 .hint{ padding:10px 12px; color: var(--muted); font-size:12px; }
 
+/* ---------- Code cell ---------- */
 .codeCell{
   display:flex;
   align-items:center;
   gap:10px;
+  min-width: 0;
 }
 .code{
   font-weight:950;
   letter-spacing: .06em;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 .copyBtn{
   height:30px;
@@ -210,10 +293,13 @@
   background: rgba(255,255,255,.78);
   font-weight:900;
   cursor:pointer;
+
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 .copyBtn:hover{ background: rgba(255,255,255,.95); }
 
-/* Status pills */
+/* ---------- Status pills ---------- */
 .pill{
   display:inline-flex;
   align-items:center;
@@ -223,23 +309,29 @@
   font-weight: 950;
   font-size: 12px;
   border: 1px solid rgba(0,0,0,.10);
+  white-space: nowrap;
 }
 .pillActive{ background: rgba(0,0,0,.06); color: rgba(0,0,0,.80); }
 .pillRedeemed{ background: rgba(12,120,70,.10); color: rgba(12,120,70,.95); border-color: rgba(12,120,70,.20); }
 .pillVoid{ background: rgba(180,35,24,.08); color:#b42318; border-color: rgba(180,35,24,.18); }
 
-/* Modals */
+/* ---------- Modals ---------- */
 .modalFooter{
   display:flex;
   justify-content:flex-end;
   gap:10px;
   width:100%;
+  flex-wrap: wrap;
+}
+@media (max-width: 720px){
+  .modalFooter{ justify-content: flex-start; }
 }
 
 .formGrid{
   display:grid;
   grid-template-columns: 1fr 1fr;
   gap:12px;
+  min-width: 0;
 }
 @media (max-width: 900px){
   .formGrid{ grid-template-columns: 1fr; }
@@ -249,17 +341,20 @@
   display:flex;
   flex-direction:column;
   gap:6px;
+  min-width: 0;
 }
 .fieldWide{ grid-column: 1 / -1; }
 
 .label{
   font-weight:900;
   color: rgba(0,0,0,.78);
+  overflow-wrap: anywhere;
 }
 .help{
   font-size:12px;
   color: rgba(0,0,0,.55);
   font-weight:800;
+  overflow-wrap: anywhere;
 }
 
 .input{
@@ -269,6 +364,10 @@
   background: rgba(255,255,255,.86);
   padding: 0 12px;
   outline:none;
+
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 .input:focus{
   border-color: rgba(0,0,0,.22);
@@ -279,6 +378,7 @@
   display:grid;
   grid-template-columns: 1fr 1fr;
   gap:12px;
+  min-width: 0;
 }
 @media (max-width: 900px){
   .detailGrid{ grid-template-columns: 1fr; }
@@ -289,12 +389,14 @@
   border-radius: 18px;
   background: rgba(255,255,255,.80);
   padding: 12px;
+  min-width: 0;
 }
 
 .detailTitle{
   font-weight:950;
   color: rgba(0,0,0,.86);
   margin-top: 10px;
+  overflow-wrap: anywhere;
 }
 .detailTitle:first-child{ margin-top:0; }
 
@@ -305,14 +407,17 @@
   color: rgba(0,0,0,.62);
   text-transform: uppercase;
   letter-spacing: .08em;
+  overflow-wrap: anywhere;
 }
 .detailValue{
   margin-top: 4px;
   font-weight:900;
   color: rgba(0,0,0,.86);
+  overflow-wrap: anywhere;
 }
 .detailValueMuted{
   margin-top: 4px;
   font-weight:800;
   color: rgba(0,0,0,.62);
+  overflow-wrap: anywhere;
 }
