@@ -8,7 +8,7 @@ export const DB_NAME = "sibel_salon_system";
  * - service_catalog: kein Kategorie-Workflow mehr, Name statt Titel
  * - product_catalog: categoryId (FK) statt category string, Name statt Titel
  */
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 
 export const schemaV2 = {
   areas: `
@@ -279,5 +279,71 @@ export const schemaV4 = {
     price,
     active,
     [categoryId+name]
+  `,
+};
+
+export const schemaV5 = {
+  ...schemaV4,
+ order_drafts: `
+    id,
+    createdAt,
+    updatedAt,
+    finalizedAt,
+    voidedAt,
+    status,
+    dateKey,
+
+    groupId,
+    participantKey,
+    participantRole,
+
+    customerId,
+    displayName,
+    phone,
+    preferredPaymentMode,
+
+    comment,
+    requestedStaffByArea,
+
+    servicesJson,
+    productsJson,
+
+    visitId,
+
+    [dateKey+status],
+    [groupId+participantKey],
+    [customerId+dateKey],
+    [status+updatedAt]
+  `,
+
+  /**
+   * Audit Log – jede Änderung/Storno/Finalize nachvollziehbar
+   */
+  order_events: `
+    id,
+    createdAt,
+    dateKey,
+    draftId,
+    type,
+    actorStaffId,
+    actorName,
+    payloadJson,
+    [draftId+createdAt],
+    [dateKey+type]
+  `,
+  visit_voids: "id, dateKey, visitId, customerId, memberId, kind, title, staffId, cashierStaffId, createdAt",
+    checkout_events: `
+    id,
+    createdAt,
+    dateKey,
+    visitId,
+    itemKey,
+    type,
+    actorStaffId,
+    actorName,
+    payloadJson,
+    [visitId+createdAt],
+    [dateKey+type],
+    [visitId+type]
   `,
 };

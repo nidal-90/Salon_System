@@ -1,0 +1,26 @@
+:root{
+  --rail-w: 72px;        /* Sidebar rail width */
+  --rail-gap: 16px;      /* gap between rail and content */
+  --shell-pad: 18px;     /* outer padding */
+  --content-max: 1180px; /* centered content width */
+}
+
+@media (max-width: 720px){
+  :root{
+    --rail-w: 64px;
+    --rail-gap: 12px;
+    --shell-pad: 12px;
+  }
+}
+
+/* Safety baseline */
+html, body, #root{
+  height: 100%;
+}
+body{
+  margin: 0;
+  overflow-x: hidden; /* prevents accidental horizontal scroll */
+}
+*{
+  box-sizing: border-box;
+}

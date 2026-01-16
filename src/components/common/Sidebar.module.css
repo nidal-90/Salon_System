@@ -1,78 +1,142 @@
-.drawer {
-  background: rgba(255, 255, 255, 0.85) !important;
-  backdrop-filter: blur(12px);
-  border-right: 1px solid rgba(0, 0, 0, 0.08);
-  overflow-x: hidden;
-  transition: width 0.25s ease;
-  position: relative !important; /* 🔴 مهم */
+:root{
+  --lux: #2b1b14;
+  --luxSoft: rgba(43,27,20,.12);
+  --luxRing: rgba(43,27,20,.20);
 }
 
-/* العرض يتغير – بدون overlay */
-.open .drawer {
-  width: 16rem !important;
+/* The rail lives in the first grid column.
+   Use sticky so it behaves like the example without overlay bugs. */
+.rail{
+  position: sticky;
+  top: var(--shell-pad);
+  height: calc(100vh - (2 * var(--shell-pad)));
+  width: 100%;
+  min-width: 0;
+  z-index: 20;
 }
 
-.closed .drawer {
-  width: 4.5rem !important;
-}
-
-.spacer {
-  height: 4rem;
-}
-
-.item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding-inline: 0.75rem;
-}
-
-.icon {
-  min-width: 2.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.textShow {
-  opacity: 1;
-  white-space: nowrap;
-  transition: opacity 0.2s ease;
-}
-
-.textHide {
-  opacity: 0;
-  width: 0;
+/* Rail card */
+.inner{
+  height: 100%;
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.78);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
   overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 
-.sessionBox {
-  padding: 1rem;
-  font-size: 0.75rem;
-  color: gray;
+/* Brand mark */
+.brandMark{
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  margin: 12px auto 6px auto;
+
+  border: 1px solid rgba(15,23,42,.10);
+  background: linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.55));
+  box-shadow: 0 8px 24px rgba(0,0,0,.08);
+  position: relative;
 }
 
-.menuBtn {
-  position: fixed !important;
-  top: 0.75rem;
-  left: 0.75rem;
-  z-index: 1400;
-  background: white !important;
-  box-shadow: 0 0.25rem 0.75rem rgba(0,0,0,0.15);
+.brandMark::after{
+  content:"";
+  position:absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--lux);
+  box-shadow: 0 0 0 4px var(--luxRing);
 }
 
-.mobileDrawer {
-  width: 15rem;
-}
-.grow {
-  flex-grow: 1;
+/* list */
+.list{
+  padding: 6px 8px !important;
 }
 
-.logoutBox {
-  margin-bottom: 0.5rem;
+/* item: MUST stay inside rail width */
+.item{
+  width: 100% !important;
+  max-width: 100% !important;
+
+  position: relative;
+  border-radius: 16px !important;
+  margin: 8px 0 !important;
+  padding: 10px 8px !important;
+
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+
+  border: 1px solid rgba(15,23,42,.08) !important;
+  background: rgba(255,255,255,.60) !important;
+
+  transition: transform .12s ease, background .12s ease, box-shadow .12s ease, border-color .12s ease;
 }
 
-.activeItem {
-  background: rgba(0, 0, 0, 0.08) !important;
-  font-weight: 600;
+.item:hover{
+  background: rgba(255,255,255,.92) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(0,0,0,.08);
+}
+
+/* active marker */
+.itemActive{
+  border-color: rgba(43,27,20,.28) !important;
+  background: rgba(43,27,20,.06) !important;
+  box-shadow: 0 10px 24px rgba(0,0,0,.10);
+}
+
+.itemActive::before{
+  content:"";
+  position:absolute;
+  left: -9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--lux);
+}
+
+/* icon */
+.icon{
+  min-width: 42px !important;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  border: 1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.75);
+}
+
+.itemActive .icon{
+  border-color: rgba(43,27,20,.22);
+  box-shadow: 0 0 0 4px var(--luxSoft);
+}
+
+.divider{
+  border-color: rgba(15,23,42,.08) !important;
+}
+
+.itemDanger{
+  border-color: rgba(239,68,68,.20) !important;
+}
+
+.grow{ flex-grow: 1; }
+
+/* small screens: rail becomes slightly tighter through tokens */
+@media (max-width: 720px){
+  .brandMark{ width: 40px; height: 40px; }
+  .icon{ width: 40px; height: 40px; }
 }

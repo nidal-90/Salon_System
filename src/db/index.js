@@ -1,7 +1,7 @@
 // src/db/index.js
 import Dexie from "dexie";
-import { DB_NAME, DB_VERSION, schemaV2, schemaV3, schemaV4 } from "./schema.js";
-import { upgradeToV2, upgradeToV3, upgradeToV4 } from "./migrations.js";
+import { DB_NAME, DB_VERSION, schemaV2, schemaV3, schemaV4, schemaV5 } from "./schema.js";
+import { upgradeToV2, upgradeToV3, upgradeToV4, upgradeToV5 } from "./migrations.js";
 import { seedIfEmpty } from "./seeds.js";
 
 export const db = new Dexie(DB_NAME);
@@ -22,9 +22,12 @@ db.version(3).stores(schemaV3).upgrade(async (tx) => {
   await upgradeToV3(tx);
 });
 
+db.version(5).stores(schemaV5).upgrade(async (tx) => {
+  await upgradeToV5(tx);
+});
 // v4 (NEW)
-db.version(DB_VERSION).stores(schemaV4).upgrade(async (tx) => {
-  await upgradeToV4(tx);
+db.version(DB_VERSION).stores(schemaV5).upgrade(async (tx) => {
+  await upgradeToV5(tx);
 });
 
 export async function openDb() {

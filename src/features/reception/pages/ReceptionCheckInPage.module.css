@@ -225,7 +225,6 @@
   padding-right: 4px;
 }
 
-/* smaller list used in group box and overlay left */
 .listSmall{
   max-height: 260px;
   overflow:auto;
@@ -258,6 +257,12 @@
   background: var(--warnBg);
 }
 
+/* NEW: done rows in group participant list */
+.rowDone{
+  border-color: rgba(34,197,94,.25);
+  background: rgba(34,197,94,.06);
+}
+
 .rowTitle{ font-weight: 950; color: var(--text); }
 .rowMeta{ margin-top: 3px; font-size: 12px; color: var(--muted); font-weight: 800; }
 
@@ -285,6 +290,21 @@
   white-space: nowrap;
 }
 
+/* NEW: small chip tag for Kontakt/Mitglied */
+.chip{
+  margin-left: 10px;
+  display:inline-flex;
+  align-items:center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(0,0,0,.04);
+  color: rgba(0,0,0,.70);
+  font-size: 12px;
+  font-weight: 900;
+}
+
 /* ===== Footer action ===== */
 .footerRow{
   display:flex;
@@ -310,7 +330,7 @@
   box-shadow:none;
 }
 
-/* ===== Group split layout (left: existing groups, right: editor) ===== */
+/* ===== Group split layout (left list, right details) ===== */
 .groupSplit{
   display:grid;
   grid-template-columns: 0.9fr 1.1fr;
@@ -355,7 +375,39 @@
 }
 .ghost:hover{ background: rgba(255,255,255,.96); }
 
-/* ===== Group form (existing styles, still used) ===== */
+/* NEW: group header (right box) */
+.groupHeader{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap: 12px;
+  padding: 6px 4px 10px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  margin-bottom: 10px;
+}
+
+.groupHeaderTitle{
+  font-weight: 950;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.groupHeaderSub{
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.participantList{
+  display:grid;
+  gap: 10px;
+  max-height: 300px;
+  overflow:auto;
+  padding-right: 4px;
+}
+
+/* ===== Group form (kept for compatibility; still used elsewhere in file) ===== */
 .groupGrid{
   display:grid;
   grid-template-columns: 1.3fr auto;

@@ -149,4 +149,12 @@ export async function upgradeToV4(tx) {
     }
     await tx.table("product_categories").bulkPut(cats);
   }
+
+  
+}
+
+export async function upgradeToV5(tx) {
+  // Minimal-risk: keine massiven Umbauten.
+  // Drafts/Events sind neu, bestehende Daten bleiben unberührt.
+  // Optional: nichts zu tun.
 }

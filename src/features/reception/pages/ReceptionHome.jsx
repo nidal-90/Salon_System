@@ -104,12 +104,16 @@ export default function ReceptionHome() {
       },
       {
         label: "Live-Status",
-        value: loading ? "…" : `${waitingCount}/${activeCount}/${doneCount}`,
+        value: loading ? "…" : `${waitingCount} / ${activeCount} / ${doneCount}`,
         meta: "Wartend / Aktiv / Fertig",
       },
     ];
   }, [loading, todayVisitsCount, areasCount, activeStaffCount, waitingCount, activeCount, doneCount]);
-
+  /*
+ <button className={styles.secondaryBtn} type="button" onClick={() => nav("/start")}>
+            Exit
+         </button>
+ */
   return (
     <div className={styles.wrap}>
       <div className={styles.headerCard}>
@@ -121,11 +125,8 @@ export default function ReceptionHome() {
         </div>
 
         <div className={styles.headerActions}>
-          <button className={styles.secondaryBtn} type="button" onClick={() => nav("/start")}>
-            Start
-          </button>
-          <button className={styles.primaryBtn} type="button" onClick={() => nav("/reception/checkin")}>
-            Neuer Check-in
+          <button className={styles.primaryBtn} type="button" onClick={() => nav("/reception/register")}>
+            +Kunde anlegen
           </button>
         </div>
       </div>
@@ -153,7 +154,7 @@ export default function ReceptionHome() {
               <div className={styles.actionMeta}>Kunde wählen/neu, Bereich, Services, Notizen</div>
             </button>
 
-            <button className={styles.action} type="button" onClick={() => nav("/reception/liveboard")}>
+            <button className={styles.action} type="button" onClick={() => nav("/reception/dashboard")}>
               <div className={styles.actionTitle}>Liveboard</div>
               <div className={styles.actionMeta}>Status: Wartend, Aktiv, Fertig – je Bereich</div>
             </button>
@@ -181,7 +182,7 @@ export default function ReceptionHome() {
 
           <div className={styles.helperRow}>
             <div className={styles.helper}>
-              Hinweis: Die Buttons sind nur Navigation. Berechtigungen laufen weiterhin über <b>RequireRole</b>.
+             
             </div>
           </div>
         </div>

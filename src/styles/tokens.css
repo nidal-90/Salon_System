@@ -48,3 +48,53 @@
   --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.10);
   --shadow-sm: 0 8px 20px rgba(0, 0, 0, 0.06);
 }
+:root {
+  /* --- Layout tokens (NEU) --- */
+  --shell-pad: 18px;         /* outer padding */
+  --rail-w: 72px;            /* fixed icon rail width */
+  --rail-gap: 16px;          /* space between rail and content */
+  --content-max: 1180px;     /* centered content max width */
+
+  /* Optional alias: some modules use --shadow (NEU, ohne design change) */
+  --shadow: var(--shadow-md);
+}
+
+@media (max-width: 900px){
+  :root{
+    --shell-pad: 12px;
+    --rail-w: 64px;
+    --rail-gap: 12px;
+    --content-max: 980px;
+  }
+}
+
+@media (max-width: 720px){
+  :root{
+    --content-max: 100%;
+  }
+}
+:root{
+  /* --- Layout tokens --- */
+  --shell-pad: 18px;
+  --rail-w: 72px;
+  --rail-gap: 16px;
+  --content-max: 1180px;
+
+  /* Alias (einige Module nutzen --shadow) */
+  --shadow: var(--shadow-md);
+}
+
+@media (max-width: 900px){
+  :root{
+    --shell-pad: 12px;
+    --rail-w: 64px;
+    --rail-gap: 12px;
+    --content-max: 980px;
+  }
+}
+
+@media (max-width: 720px){
+  :root{
+    --content-max: 100%;
+  }
+}

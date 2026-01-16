@@ -460,7 +460,7 @@ export default function RegisterPage() {
         </section>
 
         <footer className={styles.footer}>
-          <button className={`${styles.btn} ${styles.btnSecondary}`} onClick={() => nav("/start")} type="button">
+          <button className={`${styles.btn} ${styles.btnSecondary}`} onClick={() => nav(-1)} type="button">
             Zurück
           </button>
           <button className={styles.btn} onClick={save} disabled={!isValid || saving} type="button">

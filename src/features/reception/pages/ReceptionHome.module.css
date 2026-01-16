@@ -1,9 +1,14 @@
 /* src/features/reception/pages/ReceptionHome.module.css */
 
+/* ---------- Wrapper ---------- */
 .wrap{
   padding: 14px;
+  max-width: 980px;
+  margin: 0 auto;
+  min-width: 0;
 }
 
+/* ---------- Header Card ---------- */
 .headerCard{
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -16,24 +21,40 @@
   align-items:flex-start;
   justify-content:space-between;
   gap: 12px;
+
+  min-width: 0;
+}
+
+/* allow title block to shrink */
+.headerCard > :first-child{
+  min-width: 0;
 }
 
 .title{
   font-weight: 950;
   font-size: 20px;
   color: var(--text-strong);
+
+  /* safety for long titles */
+  overflow-wrap: anywhere;
 }
 
 .subtitle{
   margin-top: 4px;
   font-size: 12px;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
+/* Actions */
 .headerActions{
   display:flex;
   gap: 10px;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+
+  min-width: 0;
 }
 
 .primaryBtn, .secondaryBtn{
@@ -41,6 +62,9 @@
   padding: 10px 14px;
   font-weight: 900;
   cursor: pointer;
+
+  /* prevent awkward overflow */
+  white-space: nowrap;
 }
 
 .secondaryBtn{
@@ -48,35 +72,36 @@
   background: rgba(255,255,255,.70);
   color: var(--text);
 }
-
-.secondaryBtn:hover{
-  background: rgba(255,255,255,.95);
-}
+.secondaryBtn:hover{ background: rgba(255,255,255,.95); }
 
 .primaryBtn{
   border: 1px solid rgba(31,123,242,.25);
   background: rgba(31,123,242,.10);
   color: var(--text-strong);
 }
+.primaryBtn:hover{ background: rgba(31,123,242,.14); }
 
-.primaryBtn:hover{
-  background: rgba(31,123,242,.14);
-}
-
+/* ---------- KPI Grid ---------- */
 .grid{
   margin-top: 12px;
   display:grid;
   grid-template-columns: repeat(4, minmax(0,1fr));
   gap: 12px;
+  min-width: 0;
 }
 
 @media (max-width: 1100px){
   .grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 
+/* MOBILE: keep KPIs 2 columns (2x2) for a tighter layout like your reference */
 @media (max-width: 720px){
+  .grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+
+/* very small phones */
+@media (max-width: 380px){
   .grid{ grid-template-columns: 1fr; }
-  .headerCard{ flex-direction: column; }
 }
 
 .kpi{
@@ -86,12 +111,30 @@
   padding: 14px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
+  min-width: 0;
 }
 
-.kpiLabel{ color: var(--muted); font-weight: 900; }
-.kpiVal{ margin-top: 6px; font-size: 26px; font-weight: 950; color: var(--text-strong); }
-.kpiMeta{ margin-top: 2px; font-size: 12px; color: var(--muted); }
+.kpiLabel{
+  color: var(--muted);
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
 
+.kpiVal{
+  margin-top: 6px;
+  font-size: 20px;
+  font-weight: 950;
+  color: var(--text-strong);
+}
+
+.kpiMeta{
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Wide Panel ---------- */
 .panelWide{
   grid-column: 1 / -1;
   border: 1px solid var(--border);
@@ -100,6 +143,7 @@
   padding: 14px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
+  min-width: 0;
 }
 
 .panelHead{
@@ -108,15 +152,30 @@
   align-items:flex-start;
   gap: 10px;
   margin-bottom: 10px;
+  min-width: 0;
 }
 
-.panelTitle{ font-weight: 950; color: var(--text-strong); }
-.panelSub{ margin-top: 3px; font-size: 12px; color: var(--muted); }
+.panelHead > :first-child{ min-width: 0; }
 
+.panelTitle{
+  font-weight: 950;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.panelSub{
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Action tiles ---------- */
 .actions{
   display:grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+  min-width: 0;
 }
 
 @media (max-width: 720px){
@@ -131,27 +190,83 @@
   background: rgba(255,255,255,.70);
   cursor:pointer;
   color: var(--text);
-}
 
+  min-width: 0;
+}
 .action:hover{ background: rgba(255,255,255,.95); }
 
 .actionPrimary{
   border: 1px solid rgba(31,123,242,.25);
   background: rgba(31,123,242,.10);
 }
-
 .actionPrimary:hover{ background: rgba(31,123,242,.14); }
 
-.actionTitle{ font-weight: 950; color: var(--text-strong); }
-.actionMeta{ margin-top: 4px; font-size: 12px; color: var(--muted); }
+.actionTitle{
+  font-weight: 950;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.actionMeta{
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 
 .helperRow{
   margin-top: 10px;
   display:flex;
   justify-content:flex-end;
+  min-width: 0;
 }
 
-.helper{
-  font-size: 12px;
-  color: var(--muted);
+/* ---------- Mobile header strategy (core) ---------- */
+@media (max-width: 720px){
+  .wrap{
+    padding: 12px;
+  }
+
+  .headerCard{
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .title{ font-size: 18px; }
+  .subtitle{ font-size: 12px; }
+
+  /* buttons align nicely: 2 columns, then 1 column if too small */
+  .headerActions{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    justify-content: initial;
+  }
+
+  .primaryBtn, .secondaryBtn{
+    width: 100%;
+    text-align: center;
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  /* compact KPI cards a touch */
+  .kpi{
+    padding: 12px;
+    border-radius: 16px;
+  }
+  .kpiVal{
+    font-size: 18px;
+  }
+  .kpiMeta{
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 420px){
+  .headerActions{
+    grid-template-columns: 1fr;
+  }
 }

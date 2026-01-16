@@ -7,11 +7,25 @@ import { nextGuestDisplayName } from "../../../services/guest/guestCounter.js";
 import KioskOrderEmbed from "../../kiosk/pages/KioskOrderEmbed.jsx";
 import styles from "./ReceptionCheckInPage.module.css";
 
+/** ---------- Helpers ---------- */
 function safeName(c) {
-  const a = String(c.firstName || "").trim();
-  const b = String(c.lastName || "").trim();
+  const a = String(c?.firstName || "").trim();
+  const b = String(c?.lastName || "").trim();
   const full = `${a} ${b}`.trim();
-  return full || "Unbekannt";
+  return full || String(c?.displayName || "").trim() || "Unbekannt";
+}
+
+function groupTitle(g) {
+  if (!g) return "Gruppe";
+  return (
+    String(g?.group?.title || "").trim() ||
+    String(g?.displayName || "").trim() ||
+    "Gruppe"
+  );
+}
+
+function onlyDigits(s) {
+  return String(s || "").replace(/\D/g, "");
 }
 
 function money(n) {
@@ -19,13 +33,20 @@ function money(n) {
   return Number.isFinite(x) ? x.toFixed(2) : "0.00";
 }
 
-// Dexie helper: table exists?
-function hasTable(name) {
-  try {
-    return (db?.tables || []).some((t) => t?.name === name);
-  } catch {
-    return false;
-  }
+function buildContactDisplayName(groupRow) {
+  const a = String(groupRow?.firstName || "").trim();
+  const b = String(groupRow?.lastName || "").trim();
+  const full = `${a} ${b}`.trim();
+  return full || "Kontakt";
+}
+
+/**
+ * Create a stable key for a participant (contact/member)
+ * - contact: "contact:<groupId>"
+ * - member:  "member:<groupId>:<idx>"
+ */
+function participantKeyOf({ kind, groupId, index }) {
+  return kind === "contact" ? `contact:${groupId}` : `member:${groupId}:${index}`;
 }
 
 export default function ReceptionCheckInPage() {
@@ -38,19 +59,20 @@ export default function ReceptionCheckInPage() {
   const [query, setQuery] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
 
-  // groups (existing list)
+  // groups (stored in db.customers with kind==="group" or c.group)
   const [groups, setGroups] = useState([]);
   const [groupQuery, setGroupQuery] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState("");
 
-  // group create/edit state
-  const [groupName, setGroupName] = useState("Gruppe");
-  const [paymentMode, setPaymentMode] = useState("single"); // single|split
-  const [groupMembers, setGroupMembers] = useState([{ customerId: "", displayName: "", phone: "" }]);
+  // group participants flow
+  const [selectedParticipantKey, setSelectedParticipantKey] = useState("");
+  const [doneMap, setDoneMap] = useState({}); // { [participantKey]: true }
 
   // today visits / checkins
-  const [todayVisits, setTodayVisits] = useState([]); // rows from db.visits
+  const [todayVisits, setTodayVisits] = useState([]);
   const [todayCount, setTodayCount] = useState(0);
+
+  // derived set of checked customers for badges in customer list
   const checkedCustomerIds = useMemo(() => {
     const s = new Set();
     for (const v of todayVisits) {
@@ -61,114 +83,13 @@ export default function ReceptionCheckInPage() {
   }, [todayVisits]);
 
   // UX overlays
-  const [toast, setToast] = useState(""); // “Kunde erfolgreich eingecheckt”
+  const [toast, setToast] = useState("");
   const [openToday, setOpenToday] = useState(false);
   const [selectedVisit, setSelectedVisit] = useState(null);
 
-  // step2: embed order
+  // step2: kiosk embed
   const [profile, setProfile] = useState(null);
-
-  async function reloadBase() {
-    const [c, a] = await Promise.all([db.customers.toArray(), db.areas.count()]);
-    c.sort((x, y) => safeName(x).localeCompare(safeName(y)));
-    setCustomers(c);
-    setAreasCount(a);
-
-    const dateKey = toDateKeyISO(new Date());
-    const list = await db.visits.where("dateKey").equals(dateKey).toArray();
-    // sort newest first if createdAt exists
-    list.sort((x, y) => String(y.createdAt || "").localeCompare(String(x.createdAt || "")));
-    setTodayVisits(list);
-    setTodayCount(list.length);
-
-    // load groups if table exists
-    const groupTables = ["groups", "group_profiles", "customer_groups"];
-    const tableName = groupTables.find(hasTable);
-    if (tableName) {
-      try {
-        const g = await db[tableName].toArray();
-        g.sort((x, y) => String(x.name || "").localeCompare(String(y.name || "")));
-        setGroups(g);
-      } catch {
-        setGroups([]);
-      }
-    } else {
-      setGroups([]);
-    }
-  }
-
-  useEffect(() => {
-    reloadBase();
-  }, []);
-
-  const filteredCustomers = useMemo(() => {
-    const qx = query.trim().toLowerCase();
-    if (!qx) return customers;
-    return customers.filter((c) => {
-      const n = safeName(c).toLowerCase();
-      const p = String(c.phone || "").toLowerCase();
-      const e = String(c.email || "").toLowerCase();
-      return n.includes(qx) || p.includes(qx) || e.includes(qx);
-    });
-  }, [customers, query]);
-
-  const selectedCustomer = useMemo(() => {
-    return customers.find((c) => c.id === selectedCustomerId) || null;
-  }, [customers, selectedCustomerId]);
-
-  const filteredGroups = useMemo(() => {
-    const qx = groupQuery.trim().toLowerCase();
-    if (!qx) return groups;
-    return groups.filter((g) => {
-      const n = String(g.name || g.displayName || "").toLowerCase();
-      const meta = JSON.stringify(g || {}).toLowerCase();
-      return n.includes(qx) || meta.includes(qx);
-    });
-  }, [groups, groupQuery]);
-
-  function resetStep2() {
-    setProfile(null);
-  }
-
-  // group form helpers
-  function setMember(i, patch) {
-    setGroupMembers((p) => p.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
-    resetStep2();
-  }
-  function addMember() {
-    setGroupMembers((p) => [...p, { customerId: "", displayName: "", phone: "" }]);
-    resetStep2();
-  }
-  function removeMember(i) {
-    setGroupMembers((p) => p.filter((_, idx) => idx !== i));
-    resetStep2();
-  }
-
-  // load selected group into form (if schema supports)
-  useEffect(() => {
-    if (!selectedGroupId) return;
-    const g = groups.find((x) => String(x.id) === String(selectedGroupId));
-    if (!g) return;
-
-    setGroupName(String(g.name || g.displayName || "Gruppe"));
-    setPaymentMode(String(g.paymentMode || "single"));
-
-    // members can be stored in many ways -> handle robustly
-    let members = g.members || g.people || g.customers || [];
-    if (typeof members === "string") {
-      try { members = JSON.parse(members); } catch { members = []; }
-    }
-    if (!Array.isArray(members)) members = [];
-
-    const normalized = members.map((m) => ({
-      customerId: m.customerId ? String(m.customerId) : "",
-      displayName: String(m.displayName || m.name || "").trim(),
-      phone: String(m.phone || "").trim(),
-    }));
-
-    setGroupMembers(normalized.length ? normalized : [{ customerId: "", displayName: "", phone: "" }]);
-    resetStep2();
-  }, [selectedGroupId, groups]);
+  const [activeParticipantKey, setActiveParticipantKey] = useState("");
 
   function showToast(msg) {
     setToast(msg);
@@ -176,23 +97,152 @@ export default function ReceptionCheckInPage() {
     showToast._t = window.setTimeout(() => setToast(""), 2200);
   }
 
-  // called when kiosk finishes check-in
-  async function onCheckInDone() {
-    showToast("Kunde erfolgreich eingecheckt.");
-    // reset UI to step1
-    setProfile(null);
-    setSelectedCustomerId("");
-    setSelectedGroupId("");
-    setGroupName("Gruppe");
-    setPaymentMode("single");
-    setGroupMembers([{ customerId: "", displayName: "", phone: "" }]);
-    setMode("customer");
+  async function reloadBase() {
+    const [c, a] = await Promise.all([
+      db.customers.toArray().catch(() => []),
+      db.areas.count().catch(() => 0),
+    ]);
 
-    await reloadBase();
+    const clean = (c || []).filter(Boolean);
+    clean.sort((x, y) => safeName(x).localeCompare(safeName(y)));
+    setCustomers(clean);
+    setAreasCount(a);
+
+    const dateKey = toDateKeyISO(new Date());
+    const list = await db.visits.where("dateKey").equals(dateKey).toArray().catch(() => []);
+    list.sort((x, y) => String(y.createdAt || "").localeCompare(String(x.createdAt || "")));
+    setTodayVisits(list);
+    setTodayCount(list.length);
+
+    // IMPORTANT: groups are part of customers table (kind==="group" or has c.group)
+    const g = clean.filter((row) => {
+      const kind = String(row?.kind || "");
+      return kind === "group" || !!row?.group;
+    });
+    g.sort((x, y) => groupTitle(x).localeCompare(groupTitle(y)));
+    setGroups(g);
   }
 
-  // open kiosk
+  useEffect(() => {
+    reloadBase();
+  }, []);
+
+  /** ---------- Customers search ---------- */
+  const filteredCustomers = useMemo(() => {
+    const qx = query.trim().toLowerCase();
+    if (!qx) return customers.filter((x) => String(x?.kind || "") !== "group" && !x?.group);
+    return customers
+      .filter((x) => String(x?.kind || "") !== "group" && !x?.group)
+      .filter((c) => {
+        const n = safeName(c).toLowerCase();
+        const p = String(c.phone || "").toLowerCase();
+        const e = String(c.email || "").toLowerCase();
+        return n.includes(qx) || p.includes(qx) || e.includes(qx);
+      });
+  }, [customers, query]);
+
+  const selectedCustomer = useMemo(() => {
+    return customers.find((c) => String(c.id) === String(selectedCustomerId)) || null;
+  }, [customers, selectedCustomerId]);
+
+  /** ---------- Groups search ---------- */
+  const filteredGroups = useMemo(() => {
+    const qx = groupQuery.trim().toLowerCase();
+    if (!qx) return groups;
+    return groups.filter((g) => {
+      const n = groupTitle(g).toLowerCase();
+      const p = String(g.phone || "").toLowerCase();
+      const meta = JSON.stringify(g || {}).toLowerCase();
+      return n.includes(qx) || p.includes(qx) || meta.includes(qx);
+    });
+  }, [groups, groupQuery]);
+
+  const selectedGroup = useMemo(() => {
+    if (!selectedGroupId) return null;
+    return groups.find((g) => String(g.id) === String(selectedGroupId)) || null;
+  }, [groups, selectedGroupId]);
+
+  const selectedGroupMembers = useMemo(() => {
+    const arr = selectedGroup?.group?.members;
+    return Array.isArray(arr) ? arr : [];
+  }, [selectedGroup]);
+
+  const groupPaymentMode = useMemo(() => {
+    const pm = String(selectedGroup?.group?.paymentMode || "single");
+    return pm === "split" ? "split" : "single";
+  }, [selectedGroup]);
+
+  /** ---------- Participants list (contact + members) ---------- */
+  const participants = useMemo(() => {
+    if (!selectedGroup) return [];
+
+    const gid = String(selectedGroup.id);
+
+    const contact = {
+      kind: "contact",
+      key: participantKeyOf({ kind: "contact", groupId: gid }),
+      displayName: buildContactDisplayName(selectedGroup),
+      phone: String(selectedGroup.phone || ""),
+      customerId: String(selectedGroup.id), // NOTE: group row id (still stored in customers)
+      tag: "Kontakt",
+    };
+
+    const members = selectedGroupMembers.map((m, idx) => ({
+      kind: "member",
+      key: participantKeyOf({ kind: "member", groupId: gid, index: idx }),
+      displayName: String(m?.displayName || "").trim() || `Mitglied ${idx + 1}`,
+      phone: String(m?.phone || ""),
+      customerId: m?.customerId ? String(m.customerId) : "",
+      tag: "Mitglied",
+      index: idx,
+    }));
+
+    return [contact, ...members];
+  }, [selectedGroup, selectedGroupMembers]);
+
+  const allDone = useMemo(() => {
+    if (!participants.length) return false;
+    return participants.every((p) => !!doneMap[p.key]);
+  }, [participants, doneMap]);
+
+  const doneCount = useMemo(() => {
+    return participants.reduce((acc, p) => acc + (doneMap[p.key] ? 1 : 0), 0);
+  }, [participants, doneMap]);
+
+  function resetStep2() {
+    setProfile(null);
+    setActiveParticipantKey("");
+  }
+
+  function resetGroupFlow() {
+    setSelectedGroupId("");
+    setSelectedParticipantKey("");
+    setDoneMap({});
+    resetStep2();
+  }
+
+  // When switching modes, clean up state safely
+  useEffect(() => {
+    resetStep2();
+    if (mode !== "group") {
+      resetGroupFlow();
+    }
+    if (mode !== "customer") {
+      setSelectedCustomerId("");
+      setQuery("");
+    }
+  }, [mode]);
+
+  // When group changes: reset participant selection and done map
+  useEffect(() => {
+    setSelectedParticipantKey("");
+    setDoneMap({});
+    resetStep2();
+  }, [selectedGroupId]);
+
+  /** ---------- Next (open kiosk) ---------- */
   async function next() {
+    // CUSTOMER
     if (mode === "customer") {
       if (!selectedCustomer) return;
 
@@ -200,11 +250,13 @@ export default function ReceptionCheckInPage() {
         mode: "existing",
         customerId: selectedCustomer.id,
         displayName: safeName(selectedCustomer),
-        customer: { phone: selectedCustomer.phone || "" },
+        customer: { phone: String(selectedCustomer.phone || "") },
       });
+      setActiveParticipantKey("");
       return;
     }
 
+    // GUEST
     if (mode === "guest") {
       const name = await nextGuestDisplayName("Gast");
       setProfile({
@@ -213,40 +265,107 @@ export default function ReceptionCheckInPage() {
         displayName: name,
         customer: { phone: "" },
       });
+      setActiveParticipantKey("");
       return;
     }
 
-    // group: if user selected existing group -> use that; else build cleaned from form
-    const cleaned = groupMembers
-      .map((m) => {
-        const c = m.customerId ? customers.find((x) => x.id === m.customerId) : null;
-        const dn = String(m.displayName || "").trim() || (c ? safeName(c) : "");
-        const ph = String(m.phone || "").trim() || (c ? String(c.phone || "") : "");
-        return {
-          customerId: m.customerId ? String(m.customerId) : null,
-          displayName: dn,
-          phone: ph,
-        };
-      })
-      .filter((x) => (x.displayName || "").trim().length >= 2);
+    // GROUP (participant-by-participant)
+    if (mode === "group") {
+      if (!selectedGroup) return;
+      if (!selectedParticipantKey) return;
 
-    if (cleaned.length === 0) return;
+      const p = participants.find((x) => x.key === selectedParticipantKey);
+      if (!p) return;
 
-    setProfile({
-      mode: "group",
-      displayName: String(groupName || "Gruppe").trim(),
-      group: {
-        paymentMode,
-        members: cleaned,
-      },
-    });
+      // Build a clean profile for Kiosk:
+      // - if participant is linked to a real customer profile -> existing
+      // - else -> guest (named person)
+      const title = groupTitle(selectedGroup);
+      const display = `${title} · ${p.displayName}`.trim();
+
+      if (p.customerId && p.kind === "member") {
+        // member profile exists
+        setProfile({
+          mode: "existing",
+          customerId: p.customerId,
+          displayName: display,
+          customer: { phone: String(p.phone || "") },
+          meta: { groupId: String(selectedGroup.id), groupTitle: title, paymentMode: groupPaymentMode, participantKey: p.key },
+        });
+      } else {
+        // contact OR member without customer profile
+        setProfile({
+          mode: "guest",
+          customerId: null,
+          displayName: display,
+          customer: { phone: String(p.phone || "") },
+          meta: { groupId: String(selectedGroup.id), groupTitle: title, paymentMode: groupPaymentMode, participantKey: p.key },
+        });
+      }
+
+      setActiveParticipantKey(p.key);
+      return;
+    }
   }
 
-  // “Check-ins heute” modal: prepare a display list
+  /** ---------- Called when kiosk finishes check-in ---------- */
+  async function onCheckInDone() {
+    // If this is a group participant flow: mark participant done and continue
+    if (mode === "group" && selectedGroup && activeParticipantKey) {
+      const p = participants.find((x) => x.key === activeParticipantKey);
+      const name = p?.displayName || "Person";
+      showToast(`${name} eingecheckt.`);
+
+      setDoneMap((prev) => ({ ...prev, [activeParticipantKey]: true }));
+      resetStep2();
+
+      await reloadBase();
+
+      // auto-advance to next pending participant
+      const nextPending = participants.find((x) => !doneMap[x.key] && x.key !== activeParticipantKey);
+      // note: doneMap update is async; compute pending using a safe fallback:
+      const pending = participants.filter((x) => !doneMap[x.key] && x.key !== activeParticipantKey);
+      const choose = pending[0] || null;
+      if (choose) {
+        setSelectedParticipantKey(choose.key);
+      }
+
+      // finalize group if all done (after marking current)
+      const allWillBeDone =
+        participants.length > 0 &&
+        participants.every((x) => x.key === activeParticipantKey ? true : !!doneMap[x.key]);
+
+      if (allWillBeDone) {
+        showToast("Gruppe vollständig eingecheckt.");
+        resetGroupFlow();
+      }
+
+      return;
+    }
+
+    // Default (customer/guest) behavior: reset whole UI
+    showToast("Kunde erfolgreich eingecheckt.");
+
+    setProfile(null);
+    setSelectedCustomerId("");
+    setSelectedGroupId("");
+    setGroupQuery("");
+    setSelectedParticipantKey("");
+    setDoneMap({});
+    setMode("customer");
+
+    await reloadBase();
+  }
+
+  /** ---------- “Check-ins heute” modal: prepare list ---------- */
   const todayList = useMemo(() => {
     return todayVisits.map((v) => {
       const cid = v?.customerId || v?.customer?.id || v?.profile?.customerId || "";
-      const dn = v?.displayName || v?.customerName || v?.profile?.displayName || (cid ? `Kunde ${cid}` : "Gast/Gruppe");
+      const dn =
+        v?.displayName ||
+        v?.customerName ||
+        v?.profile?.displayName ||
+        (cid ? `Kunde ${cid}` : "Gast");
       return { id: v?.id, customerId: cid ? String(cid) : "", displayName: String(dn || "—"), raw: v };
     });
   }, [todayVisits]);
@@ -255,12 +374,11 @@ export default function ReceptionCheckInPage() {
     setSelectedVisit(v?.raw || null);
   }
 
-  // details parsing (robust)
+  /** ---------- Details parsing (robust) ---------- */
   const visitDetails = useMemo(() => {
     const v = selectedVisit;
     if (!v) return null;
 
-    // services can be: services[], selectedServices[], items[] with type
     const services =
       v.services ||
       v.selectedServices ||
@@ -286,13 +404,12 @@ export default function ReceptionCheckInPage() {
     const serviceSum = serviceLines.reduce((a, x) => a + (Number.isFinite(x.price) ? x.price : 0), 0);
     const productSum = productLines.reduce((a, x) => a + (Number.isFinite(x.price) ? x.price : 0) * (x.qty || 1), 0);
 
-    const total =
-      Number(v.total || v.sum || v.amount || 0) ||
-      (serviceSum + productSum);
+    const total = Number(v.total || v.sum || v.amount || 0) || (serviceSum + productSum);
 
     return { serviceLines, productLines, total };
   }, [selectedVisit]);
 
+  /** ---------- UI ---------- */
   return (
     <div className={styles.wrap}>
       <div className={styles.shell}>
@@ -300,7 +417,7 @@ export default function ReceptionCheckInPage() {
           <div>
             <div className={styles.title}>Reception · Check-in</div>
             <div className={styles.sub}>
-              Kunde auswählen, Gruppe anlegen oder Gast-Check-in (Gast-Nr. zählt automatisch hoch).
+              Kunde auswählen, Gruppe auswählen oder Gast-Check-in (Gast-Nr. zählt automatisch hoch).
             </div>
           </div>
 
@@ -309,12 +426,18 @@ export default function ReceptionCheckInPage() {
           </button>
         </div>
 
-        {/* Toast */}
         {toast ? <div className={styles.toast}>{toast}</div> : null}
 
         {/* KPI Row */}
         <div className={styles.kpiRow}>
-          <button className={`${styles.kpi} ${styles.kpiBtn}`} type="button" onClick={() => { setOpenToday(true); setSelectedVisit(null); }}>
+          <button
+            className={`${styles.kpi} ${styles.kpiBtn}`}
+            type="button"
+            onClick={() => {
+              setOpenToday(true);
+              setSelectedVisit(null);
+            }}
+          >
             <div className={styles.kpiLabel}>Check-ins heute</div>
             <div className={styles.kpiVal}>{todayCount}</div>
             <div className={styles.kpiMeta}>Visits (dateKey)</div>
@@ -322,7 +445,7 @@ export default function ReceptionCheckInPage() {
 
           <div className={styles.kpi}>
             <div className={styles.kpiLabel}>Kunden</div>
-            <div className={styles.kpiVal}>{customers.length}</div>
+            <div className={styles.kpiVal}>{customers.filter((x) => String(x?.kind || "") !== "group" && !x?.group).length}</div>
             <div className={styles.kpiMeta}>Profile</div>
           </div>
 
@@ -334,7 +457,9 @@ export default function ReceptionCheckInPage() {
 
           <div className={styles.kpi}>
             <div className={styles.kpiLabel}>Modus</div>
-            <div className={styles.kpiVal}>{mode === "customer" ? "Kunde" : mode === "guest" ? "Gast" : "Gruppe"}</div>
+            <div className={styles.kpiVal}>
+              {mode === "customer" ? "Kunde" : mode === "guest" ? "Gast" : "Gruppe"}
+            </div>
             <div className={styles.kpiMeta}>Auswahl</div>
           </div>
         </div>
@@ -352,21 +477,21 @@ export default function ReceptionCheckInPage() {
             <div className={styles.modeRow}>
               <button
                 className={`${styles.pill} ${mode === "customer" ? styles.pillOn : ""}`}
-                onClick={() => { setMode("customer"); resetStep2(); }}
+                onClick={() => setMode("customer")}
                 type="button"
               >
                 Kunde
               </button>
               <button
                 className={`${styles.pill} ${mode === "group" ? styles.pillOn : ""}`}
-                onClick={() => { setMode("group"); resetStep2(); }}
+                onClick={() => setMode("group")}
                 type="button"
               >
                 Gruppe
               </button>
               <button
                 className={`${styles.pill} ${mode === "guest" ? styles.pillOn : ""}`}
-                onClick={() => { setMode("guest"); resetStep2(); }}
+                onClick={() => setMode("guest")}
                 type="button"
               >
                 Gast
@@ -381,21 +506,27 @@ export default function ReceptionCheckInPage() {
                 <input
                   className={styles.search}
                   value={query}
-                  onChange={(e) => { setQuery(e.target.value); resetStep2(); }}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    resetStep2();
+                  }}
                   placeholder="Suche: Name / Telefon / E-Mail"
                 />
               </div>
 
               <div className={styles.list}>
                 {filteredCustomers.map((c) => {
-                  const on = c.id === selectedCustomerId;
+                  const on = String(c.id) === String(selectedCustomerId);
                   const isChecked = checkedCustomerIds.has(String(c.id));
 
                   return (
                     <button
                       key={c.id}
                       className={`${styles.row} ${on ? styles.rowOn : ""} ${isChecked ? styles.rowChecked : ""}`}
-                      onClick={() => { setSelectedCustomerId(c.id); resetStep2(); }}
+                      onClick={() => {
+                        setSelectedCustomerId(c.id);
+                        resetStep2();
+                      }}
                       type="button"
                     >
                       <div>
@@ -440,15 +571,19 @@ export default function ReceptionCheckInPage() {
           {/* GROUP */}
           {mode === "group" && (
             <div className={styles.step}>
-              {/* Existing groups list */}
               <div className={styles.groupSplit}>
+                {/* Existing groups list */}
                 <div className={styles.groupListBox}>
                   <div className={styles.groupListHead}>
                     <div className={styles.bold}>Vorhandene Gruppen</div>
                     <button
                       type="button"
                       className={styles.ghost}
-                      onClick={() => { setSelectedGroupId(""); setGroupQuery(""); }}
+                      onClick={() => {
+                        setSelectedGroupId("");
+                        setGroupQuery("");
+                        resetGroupFlow();
+                      }}
                     >
                       Auswahl löschen
                     </button>
@@ -463,12 +598,13 @@ export default function ReceptionCheckInPage() {
 
                   <div className={styles.listSmall}>
                     {filteredGroups.length === 0 ? (
-                      <div className={styles.emptyInline}>
-                        Keine Gruppen gefunden (oder keine Gruppen-Tabelle im DB-Schema).
-                      </div>
+                      <div className={styles.emptyInline}>Keine Gruppen gefunden.</div>
                     ) : (
                       filteredGroups.map((g) => {
                         const on = String(g.id) === String(selectedGroupId);
+                        const pm = String(g?.group?.paymentMode || "single") === "split" ? "Separat" : "Zusammen";
+                        const tel = g?.phone ? ` · Tel: ${g.phone}` : "";
+
                         return (
                           <button
                             key={g.id}
@@ -477,10 +613,8 @@ export default function ReceptionCheckInPage() {
                             onClick={() => setSelectedGroupId(String(g.id))}
                           >
                             <div>
-                              <div className={styles.rowTitle}>{String(g.name || g.displayName || "Gruppe")}</div>
-                              <div className={styles.rowMeta}>
-                                Zahlungsart: {String(g.paymentMode || "single") === "split" ? "Separat" : "Zusammen"}
-                              </div>
+                              <div className={styles.rowTitle}>{groupTitle(g)}</div>
+                              <div className={styles.rowMeta}>Zahlungsart: {pm}{tel}</div>
                             </div>
                             <div className={styles.rowRight}>
                               <div className={styles.badge}>{on ? "Ausgewählt" : "Wählen"}</div>
@@ -492,88 +626,80 @@ export default function ReceptionCheckInPage() {
                   </div>
                 </div>
 
-                {/* Create/edit group */}
+                {/* Participants */}
                 <div className={styles.groupFormBox}>
-                  <div className={styles.groupGrid}>
-                    <label className={styles.field}>
-                      <span>Gruppenname</span>
-                      <input
-                        className={styles.input}
-                        value={groupName}
-                        onChange={(e) => { setGroupName(e.target.value); resetStep2(); }}
-                        placeholder="z. B. Hochzeit Anna"
-                      />
-                    </label>
-
-                    <div className={styles.payRow}>
-                      <button
-                        className={`${styles.pill} ${paymentMode === "single" ? styles.pillOn : ""}`}
-                        onClick={() => { setPaymentMode("single"); resetStep2(); }}
-                        type="button"
-                      >
-                        Zusammen zahlen
-                      </button>
-                      <button
-                        className={`${styles.pill} ${paymentMode === "split" ? styles.pillOn : ""}`}
-                        onClick={() => { setPaymentMode("split"); resetStep2(); }}
-                        type="button"
-                      >
-                        Separat zahlen
-                      </button>
+                  {!selectedGroup ? (
+                    <div className={styles.emptyInline}>
+                      Wähle links eine Gruppe aus, um Kontakt und Mitglieder separat einzuchecken.
                     </div>
-                  </div>
-
-                  <div className={styles.members}>
-                    <div className={styles.membersHead}>
-                      <div className={styles.bold}>Mitglieder</div>
-                      <button className={styles.add} onClick={addMember} type="button">
-                        + Mitglied
-                      </button>
-                    </div>
-
-                    {groupMembers.map((m, i) => (
-                      <div key={i} className={styles.memberRow}>
-                        <select
-                          className={styles.select}
-                          value={m.customerId}
-                          onChange={(e) => setMember(i, { customerId: e.target.value })}
-                        >
-                          <option value="">Kunde wählen (optional)</option>
-                          {customers.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {safeName(c)}
-                            </option>
-                          ))}
-                        </select>
-
-                        <input
-                          className={styles.input}
-                          value={m.displayName}
-                          onChange={(e) => setMember(i, { displayName: e.target.value })}
-                          placeholder="Name (wenn kein Kunde gewählt)"
-                        />
-
-                        <input
-                          className={styles.input}
-                          value={m.phone}
-                          onChange={(e) => setMember(i, { phone: e.target.value })}
-                          placeholder="Telefon (optional)"
-                        />
-
-                        {i > 0 && (
-                          <button className={styles.remove} onClick={() => removeMember(i)} type="button">
-                            Entfernen
-                          </button>
-                        )}
+                  ) : (
+                    <>
+                      <div className={styles.groupHeader}>
+                        <div>
+                          <div className={styles.groupHeaderTitle}>{groupTitle(selectedGroup)}</div>
+                          <div className={styles.groupHeaderSub}>
+                            Zahlungsart: {groupPaymentMode === "split" ? "Separat" : "Zusammen"} · Fortschritt:{" "}
+                            <b>
+                              {doneCount}/{participants.length}
+                            </b>
+                          </div>
+                        </div>
+                        {allDone ? <div className={styles.badgeChecked}>Fertig</div> : <div className={styles.badge}>Offen</div>}
                       </div>
-                    ))}
 
-                    <div className={styles.footerRow}>
-                      <button className={styles.primary} onClick={next} type="button">
-                        Weiter
-                      </button>
-                    </div>
-                  </div>
+                      <div className={styles.participantList}>
+                        {participants.map((p) => {
+                          const on = p.key === selectedParticipantKey;
+                          const done = !!doneMap[p.key];
+                          const tel = onlyDigits(p.phone).length ? `Tel: ${p.phone}` : "Tel: —";
+
+                          return (
+                            <button
+                              key={p.key}
+                              type="button"
+                              className={`${styles.row} ${on ? styles.rowOn : ""} ${done ? styles.rowDone : ""}`}
+                              onClick={() => {
+                                setSelectedParticipantKey(p.key);
+                                resetStep2();
+                              }}
+                            >
+                              <div>
+                                <div className={styles.rowTitle}>
+                                  {p.displayName} <span className={styles.chip}>{p.tag}</span>
+                                </div>
+                                <div className={styles.rowMeta}>{tel}</div>
+                              </div>
+                              <div className={styles.rowRight}>
+                                {done ? <div className={styles.badgeChecked}>Gebucht</div> : <div className={styles.badge}>Wählen</div>}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className={styles.footerRow}>
+                        <button
+                          className={styles.primary}
+                          onClick={next}
+                          type="button"
+                          disabled={!selectedParticipantKey || !!doneMap[selectedParticipantKey]}
+                          title={doneMap[selectedParticipantKey] ? "Diese Person ist bereits gebucht." : ""}
+                        >
+                          Weiter
+                        </button>
+                      </div>
+
+                      {allDone ? (
+                        <div className={styles.note} style={{ marginTop: 12 }}>
+                          Gruppe ist vollständig eingecheckt. Du kannst jetzt eine neue Gruppe auswählen.
+                        </div>
+                      ) : (
+                        <div className={styles.note} style={{ marginTop: 12 }}>
+                          Ablauf: Person auswählen → im Kiosk buchen → „Send & Check-in starten“. Wiederholen bis alle erledigt sind.
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -596,7 +722,14 @@ export default function ReceptionCheckInPage() {
                   <div className={styles.overlayTitle}>Check-ins heute</div>
                   <div className={styles.overlaySub}>Liste & Details (Services/Produkte/Summe)</div>
                 </div>
-                <button className={styles.back} type="button" onClick={() => { setOpenToday(false); setSelectedVisit(null); }}>
+                <button
+                  className={styles.back}
+                  type="button"
+                  onClick={() => {
+                    setOpenToday(false);
+                    setSelectedVisit(null);
+                  }}
+                >
                   Schließen
                 </button>
               </div>
@@ -616,7 +749,7 @@ export default function ReceptionCheckInPage() {
                         >
                           <div>
                             <div className={styles.rowTitle}>{x.displayName}</div>
-                            <div className={styles.rowMeta}>{x.customerId ? `Kunde: ${x.customerId}` : "Gast/Gruppe"}</div>
+                            <div className={styles.rowMeta}>{x.customerId ? `Kunde: ${x.customerId}` : "Gast"}</div>
                           </div>
                           <div className={styles.rowRight}>
                             <div className={styles.badge}>Details</div>
@@ -646,14 +779,18 @@ export default function ReceptionCheckInPage() {
                         </div>
                       )}
 
-                      <div className={styles.detailTitle} style={{ marginTop: 14 }}>Produkte</div>
+                      <div className={styles.detailTitle} style={{ marginTop: 14 }}>
+                        Produkte
+                      </div>
                       {visitDetails.productLines.length === 0 ? (
                         <div className={styles.detailMuted}>Keine Produkte gefunden.</div>
                       ) : (
                         <div className={styles.detailList}>
                           {visitDetails.productLines.map((p, i) => (
                             <div key={i} className={styles.detailRow}>
-                              <div className={styles.detailName}>{p.title} <span className={styles.detailQty}>x{p.qty}</span></div>
+                              <div className={styles.detailName}>
+                                {p.title} <span className={styles.detailQty}>x{p.qty}</span>
+                              </div>
                               <div className={styles.detailPrice}>{money(p.price * p.qty)} €</div>
                             </div>
                           ))}
@@ -676,7 +813,6 @@ export default function ReceptionCheckInPage() {
             </div>
           </div>
         )}
-
       </div>
     </div>
   );

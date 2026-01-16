@@ -1,20 +1,36 @@
-/* src/app/layout/AppShell.module.css */
-.shell {
+.shell{
   min-height: 100vh;
 }
 
-.app {
-  display: flex;
+/* IMPORTANT:
+   We make one layout grid: [rail][content]
+   This prevents all “overlay / pushed down / weird center” effects. */
+.app{
   min-height: 100vh;
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  column-gap: var(--rail-gap);
+  padding: var(--shell-pad);
+  align-items: start;
 }
 
-.main {
-  flex: 1;
+/* Content column */
+.main{
+  min-height: calc(100vh - (2 * var(--shell-pad)));
   min-width: 0;
-  padding: 18px;
+  overflow-x: clip;
 }
 
-.kioskMain {
+/* Center content nicely, but never exceed column width */
+.content{
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  min-width: 0;
+}
+
+/* kiosk pages: no rail */
+.kioskMain{
   min-height: 100vh;
-  padding: 18px;
+  padding: var(--shell-pad);
 }
