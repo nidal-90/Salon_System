@@ -49,6 +49,74 @@ function participantKeyOf({ kind, groupId, index }) {
   return kind === "contact" ? `contact:${groupId}` : `member:${groupId}:${index}`;
 }
 
+function msToHhMm(ms) {
+  const s = Math.floor((ms || 0) / 1000);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  if (h <= 0) return `${mm} Min`;
+  return `${h}h ${mm} Min`;
+}
+
+/** Robust DB details loader */
+async function fetchVisitFullDetails(visitId) {
+  if (!visitId) return null;
+
+  const [visit, services, products, areaStates] = await Promise.all([
+    db.visits.get(visitId).catch(() => null),
+    db.visit_services.where("visitId").equals(visitId).toArray().catch(() => []),
+    db.visit_products.where("visitId").equals(visitId).toArray().catch(() => []),
+    db.visit_area_state.where("visitId").equals(visitId).toArray().catch(() => []),
+  ]);
+
+  const serviceLines = (services || []).map((s) => ({
+    id: s.id,
+    areaId: s.areaId,
+    title: s.title || s.name || "Service",
+    staffId: s.staffId || "",
+    staffName: s.staffName || "",
+    startedAt: s.startedAt || "",
+    endedAt: s.endedAt || "",
+    price: Number(s.price || 0),
+    note: s.note || "",
+  }));
+
+  const productLines = (products || []).map((p) => ({
+    id: p.id,
+    title: p.title || p.name || "Produkt",
+    staffId: p.staffId || "",
+    staffName: p.staffName || "",
+    qty: Number(p.qty || 1),
+    price: Number(p.price || 0),
+  }));
+
+  const now = Date.now();
+  const liveboard = (areaStates || []).map((st) => {
+    const started = st.startedAt ? Date.parse(st.startedAt) : null;
+    const ended = st.endedAt ? Date.parse(st.endedAt) : null;
+    const sinceMs = started && !ended ? Math.max(0, now - started) : 0;
+
+    return {
+      id: st.id,
+      areaId: st.areaId,
+      dateKey: st.dateKey,
+      status: st.status || "waiting",
+      preferredStaffName: st.preferredStaffName || "",
+      assignedStaffName: st.assignedStaffName || "",
+      startedAt: st.startedAt || "",
+      endedAt: st.endedAt || "",
+      sinceMs,
+      note: st.note || "",
+    };
+  });
+
+  const serviceSum = serviceLines.reduce((a, x) => a + (Number.isFinite(x.price) ? x.price : 0), 0);
+  const productSum = productLines.reduce((a, x) => a + (Number.isFinite(x.price) ? x.price : 0) * (x.qty || 1), 0);
+  const total = Number(visit?.total || visit?.sum || visit?.amount || 0) || (serviceSum + productSum);
+
+  return { visit, serviceLines, productLines, liveboard, total };
+}
+
 export default function ReceptionCheckInPage() {
   const nav = useNavigate();
 
@@ -59,7 +127,7 @@ export default function ReceptionCheckInPage() {
   const [query, setQuery] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
 
-  // groups (stored in db.customers with kind==="group" or c.group)
+  // groups
   const [groups, setGroups] = useState([]);
   const [groupQuery, setGroupQuery] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState("");
@@ -72,20 +140,15 @@ export default function ReceptionCheckInPage() {
   const [todayVisits, setTodayVisits] = useState([]);
   const [todayCount, setTodayCount] = useState(0);
 
-  // derived set of checked customers for badges in customer list
-  const checkedCustomerIds = useMemo(() => {
-    const s = new Set();
-    for (const v of todayVisits) {
-      const cid = v?.customerId || v?.customer?.id || v?.profile?.customerId;
-      if (cid) s.add(String(cid));
-    }
-    return s;
-  }, [todayVisits]);
-
   // UX overlays
   const [toast, setToast] = useState("");
   const [openToday, setOpenToday] = useState(false);
   const [selectedVisit, setSelectedVisit] = useState(null);
+
+  // detail modal (browser tabs)
+  const [detailTab, setDetailTab] = useState("order"); // customer|order|live
+  const [selectedVisitFull, setSelectedVisitFull] = useState(null);
+  const [tick, setTick] = useState(0); // triggers timer rerender
 
   // step2: kiosk embed
   const [profile, setProfile] = useState(null);
@@ -114,7 +177,6 @@ export default function ReceptionCheckInPage() {
     setTodayVisits(list);
     setTodayCount(list.length);
 
-    // IMPORTANT: groups are part of customers table (kind==="group" or has c.group)
     const g = clean.filter((row) => {
       const kind = String(row?.kind || "");
       return kind === "group" || !!row?.group;
@@ -127,18 +189,39 @@ export default function ReceptionCheckInPage() {
     reloadBase();
   }, []);
 
+  // Live timer in modal (updates "seit X Min")
+  useEffect(() => {
+    if (!openToday) return;
+    const t = window.setInterval(() => setTick((x) => x + 1), 1000 * 10);
+    return () => window.clearInterval(t);
+  }, [openToday]);
+
+  /** Map open visit by customer (blocks re-checkin, enables edit) */
+  const openVisitByCustomerId = useMemo(() => {
+    const m = new Map();
+    for (const v of todayVisits) {
+      const cid = v?.customerId ? String(v.customerId) : "";
+      if (!cid) continue;
+
+      const st = String(v.status || "open").toLowerCase();
+      const isClosed = ["done", "closed", "checkout_done", "voided", "canceled"].includes(st);
+
+      if (!isClosed && !m.has(cid)) m.set(cid, v);
+    }
+    return m;
+  }, [todayVisits]);
+
   /** ---------- Customers search ---------- */
   const filteredCustomers = useMemo(() => {
     const qx = query.trim().toLowerCase();
-    if (!qx) return customers.filter((x) => String(x?.kind || "") !== "group" && !x?.group);
-    return customers
-      .filter((x) => String(x?.kind || "") !== "group" && !x?.group)
-      .filter((c) => {
-        const n = safeName(c).toLowerCase();
-        const p = String(c.phone || "").toLowerCase();
-        const e = String(c.email || "").toLowerCase();
-        return n.includes(qx) || p.includes(qx) || e.includes(qx);
-      });
+    const base = customers.filter((x) => String(x?.kind || "") !== "group" && !x?.group);
+    if (!qx) return base;
+    return base.filter((c) => {
+      const n = safeName(c).toLowerCase();
+      const p = String(c.phone || "").toLowerCase();
+      const e = String(c.email || "").toLowerCase();
+      return n.includes(qx) || p.includes(qx) || e.includes(qx);
+    });
   }, [customers, query]);
 
   const selectedCustomer = useMemo(() => {
@@ -183,7 +266,7 @@ export default function ReceptionCheckInPage() {
       key: participantKeyOf({ kind: "contact", groupId: gid }),
       displayName: buildContactDisplayName(selectedGroup),
       phone: String(selectedGroup.phone || ""),
-      customerId: String(selectedGroup.id), // NOTE: group row id (still stored in customers)
+      customerId: String(selectedGroup.id),
       tag: "Kontakt",
     };
 
@@ -221,9 +304,9 @@ export default function ReceptionCheckInPage() {
     resetStep2();
   }
 
-  // When switching modes, clean up state safely
   useEffect(() => {
     resetStep2();
+
     if (mode !== "group") {
       resetGroupFlow();
     }
@@ -233,7 +316,6 @@ export default function ReceptionCheckInPage() {
     }
   }, [mode]);
 
-  // When group changes: reset participant selection and done map
   useEffect(() => {
     setSelectedParticipantKey("");
     setDoneMap({});
@@ -246,11 +328,17 @@ export default function ReceptionCheckInPage() {
     if (mode === "customer") {
       if (!selectedCustomer) return;
 
+      const openVisit = openVisitByCustomerId.get(String(selectedCustomer.id)) || null;
+
       setProfile({
         mode: "existing",
         customerId: selectedCustomer.id,
         displayName: safeName(selectedCustomer),
         customer: { phone: String(selectedCustomer.phone || "") },
+        meta: {
+          visitId: openVisit?.id || null,
+          isEdit: !!openVisit,
+        },
       });
       setActiveParticipantKey("");
       return;
@@ -264,12 +352,13 @@ export default function ReceptionCheckInPage() {
         customerId: null,
         displayName: name,
         customer: { phone: "" },
+        meta: { visitId: null, isEdit: false },
       });
       setActiveParticipantKey("");
       return;
     }
 
-    // GROUP (participant-by-participant)
+    // GROUP
     if (mode === "group") {
       if (!selectedGroup) return;
       if (!selectedParticipantKey) return;
@@ -277,29 +366,38 @@ export default function ReceptionCheckInPage() {
       const p = participants.find((x) => x.key === selectedParticipantKey);
       if (!p) return;
 
-      // Build a clean profile for Kiosk:
-      // - if participant is linked to a real customer profile -> existing
-      // - else -> guest (named person)
       const title = groupTitle(selectedGroup);
       const display = `${title} · ${p.displayName}`.trim();
 
       if (p.customerId && p.kind === "member") {
-        // member profile exists
         setProfile({
           mode: "existing",
           customerId: p.customerId,
           displayName: display,
           customer: { phone: String(p.phone || "") },
-          meta: { groupId: String(selectedGroup.id), groupTitle: title, paymentMode: groupPaymentMode, participantKey: p.key },
+          meta: {
+            groupId: String(selectedGroup.id),
+            groupTitle: title,
+            paymentMode: groupPaymentMode,
+            participantKey: p.key,
+            visitId: null,
+            isEdit: false,
+          },
         });
       } else {
-        // contact OR member without customer profile
         setProfile({
           mode: "guest",
           customerId: null,
           displayName: display,
           customer: { phone: String(p.phone || "") },
-          meta: { groupId: String(selectedGroup.id), groupTitle: title, paymentMode: groupPaymentMode, participantKey: p.key },
+          meta: {
+            groupId: String(selectedGroup.id),
+            groupTitle: title,
+            paymentMode: groupPaymentMode,
+            participantKey: p.key,
+            visitId: null,
+            isEdit: false,
+          },
         });
       }
 
@@ -310,7 +408,7 @@ export default function ReceptionCheckInPage() {
 
   /** ---------- Called when kiosk finishes check-in ---------- */
   async function onCheckInDone() {
-    // If this is a group participant flow: mark participant done and continue
+    // Group flow: mark participant done
     if (mode === "group" && selectedGroup && activeParticipantKey) {
       const p = participants.find((x) => x.key === activeParticipantKey);
       const name = p?.displayName || "Person";
@@ -321,19 +419,13 @@ export default function ReceptionCheckInPage() {
 
       await reloadBase();
 
-      // auto-advance to next pending participant
-      const nextPending = participants.find((x) => !doneMap[x.key] && x.key !== activeParticipantKey);
-      // note: doneMap update is async; compute pending using a safe fallback:
       const pending = participants.filter((x) => !doneMap[x.key] && x.key !== activeParticipantKey);
       const choose = pending[0] || null;
-      if (choose) {
-        setSelectedParticipantKey(choose.key);
-      }
+      if (choose) setSelectedParticipantKey(choose.key);
 
-      // finalize group if all done (after marking current)
       const allWillBeDone =
         participants.length > 0 &&
-        participants.every((x) => x.key === activeParticipantKey ? true : !!doneMap[x.key]);
+        participants.every((x) => (x.key === activeParticipantKey ? true : !!doneMap[x.key]));
 
       if (allWillBeDone) {
         showToast("Gruppe vollständig eingecheckt.");
@@ -343,8 +435,8 @@ export default function ReceptionCheckInPage() {
       return;
     }
 
-    // Default (customer/guest) behavior: reset whole UI
-    showToast("Kunde erfolgreich eingecheckt.");
+    // customer/guest
+    showToast("Vorgang gespeichert.");
 
     setProfile(null);
     setSelectedCustomerId("");
@@ -357,7 +449,7 @@ export default function ReceptionCheckInPage() {
     await reloadBase();
   }
 
-  /** ---------- “Check-ins heute” modal: prepare list ---------- */
+  /** ---------- “Check-ins heute” modal: list ---------- */
   const todayList = useMemo(() => {
     return todayVisits.map((v) => {
       const cid = v?.customerId || v?.customer?.id || v?.profile?.customerId || "";
@@ -370,46 +462,19 @@ export default function ReceptionCheckInPage() {
     });
   }, [todayVisits]);
 
-  function openVisitDetails(v) {
-    setSelectedVisit(v?.raw || null);
+  async function openVisitDetails(v) {
+    const raw = v?.raw || null;
+    setSelectedVisit(raw);
+    setDetailTab("order");
+    setSelectedVisitFull(null);
+
+    const full = await fetchVisitFullDetails(raw?.id);
+    setSelectedVisitFull(full);
   }
 
-  /** ---------- Details parsing (robust) ---------- */
-  const visitDetails = useMemo(() => {
-    const v = selectedVisit;
-    if (!v) return null;
-
-    const services =
-      v.services ||
-      v.selectedServices ||
-      (Array.isArray(v.items) ? v.items.filter((x) => x.type === "service") : []) ||
-      [];
-
-    const products =
-      v.products ||
-      (Array.isArray(v.items) ? v.items.filter((x) => x.type === "product") : []) ||
-      [];
-
-    const serviceLines = (Array.isArray(services) ? services : []).map((s) => ({
-      title: s.title || s.name || "Service",
-      price: Number(s.price || s.amount || 0),
-    }));
-
-    const productLines = (Array.isArray(products) ? products : []).map((p) => ({
-      title: p.title || p.name || "Produkt",
-      qty: Number(p.qty || 1),
-      price: Number(p.price || p.amount || 0),
-    }));
-
-    const serviceSum = serviceLines.reduce((a, x) => a + (Number.isFinite(x.price) ? x.price : 0), 0);
-    const productSum = productLines.reduce((a, x) => a + (Number.isFinite(x.price) ? x.price : 0) * (x.qty || 1), 0);
-
-    const total = Number(v.total || v.sum || v.amount || 0) || (serviceSum + productSum);
-
-    return { serviceLines, productLines, total };
-  }, [selectedVisit]);
-
   /** ---------- UI ---------- */
+  const selectedOpenVisit = selectedCustomerId ? openVisitByCustomerId.get(String(selectedCustomerId)) : null;
+
   return (
     <div className={styles.wrap}>
       <div className={styles.shell}>
@@ -436,6 +501,8 @@ export default function ReceptionCheckInPage() {
             onClick={() => {
               setOpenToday(true);
               setSelectedVisit(null);
+              setSelectedVisitFull(null);
+              setDetailTab("order");
             }}
           >
             <div className={styles.kpiLabel}>Check-ins heute</div>
@@ -517,12 +584,13 @@ export default function ReceptionCheckInPage() {
               <div className={styles.list}>
                 {filteredCustomers.map((c) => {
                   const on = String(c.id) === String(selectedCustomerId);
-                  const isChecked = checkedCustomerIds.has(String(c.id));
+                  const openVisit = openVisitByCustomerId.get(String(c.id)) || null;
+                  const isOpenChecked = !!openVisit;
 
                   return (
                     <button
                       key={c.id}
-                      className={`${styles.row} ${on ? styles.rowOn : ""} ${isChecked ? styles.rowChecked : ""}`}
+                      className={`${styles.row} ${on ? styles.rowOn : ""} ${isOpenChecked ? styles.rowChecked : ""}`}
                       onClick={() => {
                         setSelectedCustomerId(c.id);
                         resetStep2();
@@ -537,8 +605,8 @@ export default function ReceptionCheckInPage() {
                       </div>
 
                       <div className={styles.rowRight}>
-                        {isChecked ? <div className={styles.badgeChecked}>Eingecheckt</div> : null}
-                        <div className={styles.badge}>{on ? "Ausgewählt" : "Wählen"}</div>
+                        {isOpenChecked ? <div className={styles.badgeChecked}>Bearbeiten</div> : null}
+                        
                       </div>
                     </button>
                   );
@@ -547,7 +615,7 @@ export default function ReceptionCheckInPage() {
 
               <div className={styles.footerRow}>
                 <button className={styles.primary} onClick={next} disabled={!selectedCustomerId} type="button">
-                  Weiter
+                  {selectedOpenVisit ? "Bestellung bearbeiten" : "Weiter"}
                 </button>
               </div>
             </div>
@@ -572,7 +640,6 @@ export default function ReceptionCheckInPage() {
           {mode === "group" && (
             <div className={styles.step}>
               <div className={styles.groupSplit}>
-                {/* Existing groups list */}
                 <div className={styles.groupListBox}>
                   <div className={styles.groupListHead}>
                     <div className={styles.bold}>Vorhandene Gruppen</div>
@@ -610,14 +677,17 @@ export default function ReceptionCheckInPage() {
                             key={g.id}
                             type="button"
                             className={`${styles.row} ${on ? styles.rowOn : ""}`}
-                            onClick={() => setSelectedGroupId(String(g.id))}
+                            onClick={() => {
+                              setSelectedGroupId(String(g.id));
+                              resetStep2();
+                            }}
                           >
                             <div>
                               <div className={styles.rowTitle}>{groupTitle(g)}</div>
                               <div className={styles.rowMeta}>Zahlungsart: {pm}{tel}</div>
                             </div>
                             <div className={styles.rowRight}>
-                              <div className={styles.badge}>{on ? "Ausgewählt" : "Wählen"}</div>
+                              {on ? <div className={styles.badge}>Ausgewählt</div> : null}
                             </div>
                           </button>
                         );
@@ -626,7 +696,6 @@ export default function ReceptionCheckInPage() {
                   </div>
                 </div>
 
-                {/* Participants */}
                 <div className={styles.groupFormBox}>
                   {!selectedGroup ? (
                     <div className={styles.emptyInline}>
@@ -644,7 +713,11 @@ export default function ReceptionCheckInPage() {
                             </b>
                           </div>
                         </div>
-                        {allDone ? <div className={styles.badgeChecked}>Fertig</div> : <div className={styles.badge}>Offen</div>}
+                        {allDone ? (
+                          <div className={styles.badgeChecked}>Fertig</div>
+                        ) : (
+                          <div className={styles.badge}>Offen</div>
+                        )}
                       </div>
 
                       <div className={styles.participantList}>
@@ -670,7 +743,8 @@ export default function ReceptionCheckInPage() {
                                 <div className={styles.rowMeta}>{tel}</div>
                               </div>
                               <div className={styles.rowRight}>
-                                {done ? <div className={styles.badgeChecked}>Gebucht</div> : <div className={styles.badge}>Wählen</div>}
+                                {done ? <div className={styles.badgeChecked}>Gebucht</div> : null}
+                                {on ? <div className={styles.badge}>Ausgewählt</div> : null}
                               </div>
                             </button>
                           );
@@ -720,7 +794,7 @@ export default function ReceptionCheckInPage() {
               <div className={styles.overlayHead}>
                 <div>
                   <div className={styles.overlayTitle}>Check-ins heute</div>
-                  <div className={styles.overlaySub}>Liste & Details (Services/Produkte/Summe)</div>
+                  <div className={styles.overlaySub}>Kunde · Bestellung · Liveboard</div>
                 </div>
                 <button
                   className={styles.back}
@@ -728,6 +802,8 @@ export default function ReceptionCheckInPage() {
                   onClick={() => {
                     setOpenToday(false);
                     setSelectedVisit(null);
+                    setSelectedVisitFull(null);
+                    setDetailTab("order");
                   }}
                 >
                   Schließen
@@ -749,10 +825,12 @@ export default function ReceptionCheckInPage() {
                         >
                           <div>
                             <div className={styles.rowTitle}>{x.displayName}</div>
-                            <div className={styles.rowMeta}>{x.customerId ? `Kunde: ${x.customerId}` : "Gast"}</div>
+                            <div className={styles.rowMeta}>
+                              {x.customerId ? `Kunde: ${x.customerId}` : "Gast"} · Visit: {String(x.id || "—")}
+                            </div>
                           </div>
                           <div className={styles.rowRight}>
-                            <div className={styles.badge}>Details</div>
+                            <div className={styles.badge}>Öffnen</div>
                           </div>
                         </button>
                       ))
@@ -761,55 +839,140 @@ export default function ReceptionCheckInPage() {
                 </div>
 
                 <div className={styles.overlayRight}>
-                  {!visitDetails ? (
+                  {!selectedVisit ? (
                     <div className={styles.emptyInline}>Wähle links einen Check-in, um Details zu sehen.</div>
+                  ) : !selectedVisitFull ? (
+                    <div className={styles.emptyInline}>Details werden geladen…</div>
                   ) : (
                     <div className={styles.detailCard}>
-                      <div className={styles.detailTitle}>Leistungen</div>
-                      {visitDetails.serviceLines.length === 0 ? (
-                        <div className={styles.detailMuted}>Keine Services gefunden.</div>
-                      ) : (
-                        <div className={styles.detailList}>
-                          {visitDetails.serviceLines.map((s, i) => (
-                            <div key={i} className={styles.detailRow}>
-                              <div className={styles.detailName}>{s.title}</div>
-                              <div className={styles.detailPrice}>{money(s.price)} €</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className={styles.detailTitle} style={{ marginTop: 14 }}>
-                        Produkte
+                      {/* Browser Tabs */}
+                      <div className={styles.browserTabs}>
+                        <button
+                          type="button"
+                          className={`${styles.browserTab} ${detailTab === "customer" ? styles.browserTabOn : ""}`}
+                          onClick={() => setDetailTab("customer")}
+                        >
+                          Kunde
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.browserTab} ${detailTab === "order" ? styles.browserTabOn : ""}`}
+                          onClick={() => setDetailTab("order")}
+                        >
+                          Bestellung
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.browserTab} ${detailTab === "live" ? styles.browserTabOn : ""}`}
+                          onClick={() => setDetailTab("live")}
+                        >
+                          Liveboard
+                        </button>
                       </div>
-                      {visitDetails.productLines.length === 0 ? (
-                        <div className={styles.detailMuted}>Keine Produkte gefunden.</div>
-                      ) : (
-                        <div className={styles.detailList}>
-                          {visitDetails.productLines.map((p, i) => (
-                            <div key={i} className={styles.detailRow}>
-                              <div className={styles.detailName}>
-                                {p.title} <span className={styles.detailQty}>x{p.qty}</span>
+
+                      <div className={styles.browserPanel}>
+                        {detailTab === "customer" ? (
+                          <>
+                            <div className={styles.detailTitle}>Kundendaten</div>
+                            <div className={styles.detailList}>
+                              <div className={styles.detailRow}>
+                                <div className={styles.detailName}>Name</div>
+                                <div className={styles.detailPrice}>{selectedVisitFull.visit?.displayName || "—"}</div>
                               </div>
-                              <div className={styles.detailPrice}>{money(p.price * p.qty)} €</div>
+                              <div className={styles.detailRow}>
+                                <div className={styles.detailName}>Kunde-ID</div>
+                                <div className={styles.detailPrice}>{selectedVisitFull.visit?.customerId || "Gast"}</div>
+                              </div>
+                              <div className={styles.detailRow}>
+                                <div className={styles.detailName}>Status</div>
+                                <div className={styles.detailPrice}>{String(selectedVisitFull.visit?.status || "open")}</div>
+                              </div>
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          </>
+                        ) : null}
 
-                      <div className={styles.detailTotal}>
-                        <div>Summe</div>
-                        <div>{money(visitDetails.total)} €</div>
-                      </div>
+                        {detailTab === "order" ? (
+                          <>
+                            <div className={styles.detailTitle}>Leistungen</div>
+                            {selectedVisitFull.serviceLines.length === 0 ? (
+                              <div className={styles.detailMuted}>Keine Services gefunden.</div>
+                            ) : (
+                              <div className={styles.detailList}>
+                                {selectedVisitFull.serviceLines.map((s) => (
+                                  <div key={s.id} className={styles.detailRow}>
+                                    <div className={styles.detailName}>
+                                      {s.title}
+                                      {s.staffName ? <span className={styles.detailQty}> · {s.staffName}</span> : null}
+                                    </div>
+                                    <div className={styles.detailPrice}>{money(s.price)} €</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
 
-                      <div className={styles.detailHint}>
-                        Hinweis: Details werden aus dem Visit-Datensatz gelesen. Falls dein Visit-Schema andere Feldnamen nutzt,
-                        sag mir die Visit-Struktur (Beispielobjekt), dann mappe ich es exakt.
+                            <div className={styles.detailTitle} style={{ marginTop: 14 }}>
+                              Produkte
+                            </div>
+                            {selectedVisitFull.productLines.length === 0 ? (
+                              <div className={styles.detailMuted}>Keine Produkte gefunden.</div>
+                            ) : (
+                              <div className={styles.detailList}>
+                                {selectedVisitFull.productLines.map((p) => (
+                                  <div key={p.id} className={styles.detailRow}>
+                                    <div className={styles.detailName}>
+                                      {p.title} <span className={styles.detailQty}>x{p.qty}</span>
+                                      {p.staffName ? <span className={styles.detailQty}> · {p.staffName}</span> : null}
+                                    </div>
+                                    <div className={styles.detailPrice}>{money(p.price * p.qty)} €</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <div className={styles.detailTotal}>
+                              <div>Summe</div>
+                              <div>{money(selectedVisitFull.total)} €</div>
+                            </div>
+                          </>
+                        ) : null}
+
+                        {detailTab === "live" ? (
+                          <>
+                            <div className={styles.detailTitle}>Live-Status je Bereich</div>
+                            {selectedVisitFull.liveboard.length === 0 ? (
+                              <div className={styles.detailMuted}>Kein Bereichsstatus gefunden.</div>
+                            ) : (
+                              <div className={styles.detailList}>
+                                {selectedVisitFull.liveboard.map((st) => (
+                                  <div key={st.id} className={styles.detailRow}>
+                                    <div className={styles.detailName}>
+                                      Bereich: {st.areaId} · {String(st.status)}
+                                      {st.assignedStaffName ? (
+                                        <span className={styles.detailQty}> · {st.assignedStaffName}</span>
+                                      ) : null}
+                                    </div>
+                                    <div className={styles.detailPrice}>
+                                      {st.sinceMs ? `seit ${msToHhMm(st.sinceMs)}` : st.startedAt ? "—" : "noch nicht gestartet"}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <div className={styles.detailHint}>
+                              Tipp: Status kommt aus <b>visit_area_state</b>. Wenn du Status-Namen standardisieren willst
+                              (waiting/active/checkout/done), sag mir deine finalen Werte – dann mappe ich Labels/Badges exakt.
+                            </div>
+                          </>
+                        ) : null}
                       </div>
                     </div>
                   )}
                 </div>
               </div>
+
+              {/* tick is used to re-render timers */}
+              <div style={{ display: "none" }}>{tick}</div>
             </div>
           </div>
         )}
