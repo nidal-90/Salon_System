@@ -4,7 +4,12 @@ function asMoney(n) {
   if (!Number.isFinite(n)) return 0;
   return Number(n.toFixed(2));
 }
-
+function safeStr(x) {
+  return String(x == null ? "" : x).trim();
+}
+function onlyDigits(s) {
+  return String(s || "").replace(/\D/g, "");
+}
 function normalizeActive(v) {
   if (typeof v === "boolean") return v ? 1 : 0;
   if (v == null) return 1;
@@ -13,7 +18,6 @@ function normalizeActive(v) {
 
 async function assignDisplayNos(tx, tableName, titleField) {
   const rows = await tx.table(tableName).toArray();
-  // keep existing displayNo if present, otherwise assign sequential
   let next = 1;
   for (const r of rows) {
     if (!r.displayNo || Number(r.displayNo) <= 0) {
@@ -21,16 +25,12 @@ async function assignDisplayNos(tx, tableName, titleField) {
     } else {
       next = Math.max(next, Number(r.displayNo) + 1);
     }
-    // normalize titles/names
-    if (titleField && r[titleField] != null) {
-      r[titleField] = String(r[titleField] || "").trim();
-    }
+    if (titleField && r[titleField] != null) r[titleField] = String(r[titleField] || "").trim();
   }
   await tx.table(tableName).bulkPut(rows);
 }
 
 export async function upgradeToV2(tx) {
-  // staff defaults
   await tx.table("staff").toCollection().modify((s) => {
     if (!s.id) s.id = crypto.randomUUID();
     s.active = normalizeActive(s.active);
@@ -69,38 +69,26 @@ export async function upgradeToV3(tx) {
   });
 }
 
-/**
- * v4 migration:
- * - areas.displayNo + product_categories.displayNo (UI IDs 01/02..)
- * - service_catalog.name from title
- * - product_catalog.name from title + categoryId from old category string
- */
 export async function upgradeToV4(tx) {
-  // Areas: add displayNo if missing
   await assignDisplayNos(tx, "areas", "name");
   await tx.table("areas").toCollection().modify((a) => {
     a.active = normalizeActive(a.active);
     a.name = String(a.name || "").trim();
   });
 
-  // Ensure product_categories exists and has displayNo
   await assignDisplayNos(tx, "product_categories", "title");
   await tx.table("product_categories").toCollection().modify((c) => {
     c.active = normalizeActive(c.active);
     c.title = String(c.title || "").trim();
   });
 
-  // Services: ensure name exists, normalize
   await tx.table("service_catalog").toCollection().modify((s) => {
     s.active = normalizeActive(s.active);
     s.price = asMoney(s.price ?? 0);
-    // keep legacy title, but set name as primary for new UI
     if (!s.name) s.name = String(s.title || "").trim();
     s.title = String(s.title || s.name || "").trim();
   });
 
-  // Products: ensure name exists, normalize
-  // Map old string category -> product_categories row -> categoryId
   const cats = await tx.table("product_categories").toArray();
   const byTitle = new Map(cats.map((c) => [String(c.title || "").toLowerCase(), c]));
 
@@ -111,19 +99,13 @@ export async function upgradeToV4(tx) {
     if (!p.name) p.name = String(p.title || "").trim();
     p.title = String(p.title || p.name || "").trim();
 
-    // If old "category" exists and new categoryId missing -> create/match
     if (!p.categoryId) {
       const old = String(p.category || "").trim();
       const key = old.toLowerCase();
       if (old) {
         let c = byTitle.get(key);
         if (!c) {
-          c = {
-            id: crypto.randomUUID(),
-            displayNo: 0, // will be assigned in a second pass
-            title: old,
-            active: 1,
-          };
+          c = { id: crypto.randomUUID(), displayNo: 0, title: old, active: 1 };
           cats.push(c);
           byTitle.set(key, c);
         }
@@ -132,14 +114,10 @@ export async function upgradeToV4(tx) {
     }
   });
 
-  // If we created new categories during mapping, assign missing displayNo now
   if (cats.some((c) => !c.displayNo || Number(c.displayNo) <= 0)) {
-    // assign sequential but keep existing
     let next = 1;
-    // reserve existing
     const used = new Set(cats.map((c) => Number(c.displayNo || 0)).filter((x) => x > 0));
     while (used.has(next)) next++;
-
     for (const c of cats) {
       if (!c.displayNo || Number(c.displayNo) <= 0) {
         while (used.has(next)) next++;
@@ -149,12 +127,90 @@ export async function upgradeToV4(tx) {
     }
     await tx.table("product_categories").bulkPut(cats);
   }
-
-  
 }
 
 export async function upgradeToV5(tx) {
-  // Minimal-risk: keine massiven Umbauten.
-  // Drafts/Events sind neu, bestehende Daten bleiben unberührt.
-  // Optional: nichts zu tun.
+  // v5 adds order_drafts/order_events/checkout_events/visit_voids
+  // intentionally no heavy changes here
+}
+
+/**
+ * v6 migration:
+ * - legacy group entries that were stored inside customers -> move to groups + group_members
+ * - backfill visits.groupId for legacy group visits (type="group" and customerId used as groupId)
+ */
+export async function upgradeToV6(tx) {
+  const now = new Date().toISOString();
+
+  // ---- 1) migrate legacy groups from customers (if they exist) ----
+  const customers = await tx.table("customers").toArray().catch(() => []);
+  const legacyGroups = (customers || []).filter((c) => {
+    // accept multiple legacy flags (robust)
+    const kind = String(c?.kind || "").toLowerCase();
+    return kind === "group" || !!c?.group || String(c?.type || "").toLowerCase() === "group";
+  });
+
+  for (const c of legacyGroups) {
+    const groupId = String(c.id);
+    const legacy = c?.group || {};
+    const title =
+      safeStr(legacy?.title) ||
+      safeStr(c?.displayName) ||
+      safeStr(`${c?.firstName || ""} ${c?.lastName || ""}`) ||
+      "Gruppe";
+
+    // create/overwrite group row (id stable)
+    await tx.table("groups").put({
+      id: groupId,
+      createdAt: c.createdAt || now,
+      updatedAt: c.updatedAt || now,
+      title,
+      active: 1,
+
+      contactFirstName: safeStr(c.firstName),
+      contactLastName: safeStr(c.lastName),
+      phone: onlyDigits(c.phone),
+      email: safeStr(c.email).toLowerCase(),
+      instagram: safeStr(c.instagram),
+
+      marketingConsent: c.marketingConsent ? 1 : 0,
+      address: c.address || { street: "", city: "" },
+      note: safeStr(c.note),
+
+      paymentMode: safeStr(legacy?.paymentMode) === "split" ? "split" : "single",
+    });
+
+    const members = Array.isArray(legacy?.members) ? legacy.members : [];
+    const rows = members.map((m, idx) => ({
+      id: crypto.randomUUID(),
+      groupId,
+      displayName: safeStr(m.displayName) || `Mitglied ${idx + 1}`,
+      phone: onlyDigits(m.phone),
+      customerId: safeStr(m.customerId),
+      sortOrder: idx + 1,
+      createdAt: c.createdAt || now,
+      updatedAt: c.updatedAt || now,
+    }));
+
+    if (rows.length) {
+      await tx.table("group_members").bulkPut(rows);
+    }
+  }
+
+  // ---- 2) backfill visits.groupId for legacy group-visits ----
+  // Legacy behaviour in your orderApi: customerId = groupId (for group visits)
+  const visits = await tx.table("visits").toArray().catch(() => []);
+  for (const v of visits || []) {
+    const type = String(v?.type || "").toLowerCase();
+    const hasGroupId = String(v?.groupId || "").trim().length > 0;
+    if (hasGroupId) continue;
+
+    if (type === "group") {
+      const cid = String(v?.customerId || "").trim();
+      if (cid) {
+        // If customerId looks like a groupId, store it
+        await tx.table("visits").update(String(v.id), { groupId: cid });
+      }
+    }
+  }
 }

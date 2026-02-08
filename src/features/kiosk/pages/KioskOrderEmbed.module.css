@@ -1,4 +1,4 @@
-/* src/features/kiosk/pages/KioskOrderEmbed.module.css */
+/* src/features/kiosk/components/KioskOrderEmbed.module.css */
 
 /* =================== Tokens =================== */
 :root{
@@ -27,19 +27,19 @@
   --warnBg: rgba(245,158,11,.12);
   --warnStroke: rgba(245,158,11,.30);
 
-  /* selected (ok) */
   --okBg: rgba(34,197,94,.12);
   --okStroke: rgba(34,197,94,.30);
-  --okText: rgba(5,46,22,.90);
 
-  /* orange save */
   --hot: rgba(249,115,22,1);
   --hot2: rgba(234,88,12,1);
   --hotStroke: rgba(249,115,22,.35);
 
-  /* neutral pills */
   --pillBg: rgba(255,255,255,.80);
   --pillStroke: rgba(15,23,42,.10);
+
+  /* Apple-like ambient */
+  --glowGreen: 0 0 0 3px rgba(34,197,94,.10) inset, 0 18px 44px rgba(34,197,94,.08);
+  --glowOrange: 0 0 0 3px rgba(249,115,22,.10) inset, 0 18px 44px rgba(249,115,22,.10);
 }
 
 /* =================== Shell =================== */
@@ -60,6 +60,14 @@
   min-width: 0;
 }
 
+.headTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
 .kicker{
   font-size: 11px;
   font-weight: 950;
@@ -68,14 +76,79 @@
   color: rgba(11,18,32,.52);
 }
 
-/* Name 20% kleiner (18px -> ~14.5-15px ist zu klein; wir nehmen 15px-16px) */
 .name{
   margin-top: 6px;
-  font-size: 15px; /* ~17% kleiner, wirkt besser als 14 */
+  font-size: 15px;
   font-weight: 950;
   letter-spacing: -0.01em;
   color: var(--text);
   overflow-wrap: anywhere;
+}
+
+/* =================== Global Search =================== */
+.globalSearch{
+  position: relative;
+  min-width: 180px;
+  flex: 1 1 320px;
+  max-width: 420px;
+}
+
+.search{
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--stroke2);
+  background: rgba(255,255,255,.96);
+  outline: none;
+  color: var(--text);
+  font-weight: 850;
+}
+
+.search:focus{
+  border-color: rgba(17,17,17,.22);
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+.suggestBox{
+  position: absolute;
+  top: 46px;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  border-radius: 18px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.98);
+  box-shadow: 0 18px 50px rgba(2,8,23,.10);
+  overflow: hidden;
+}
+
+.suggestItem{
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  background: transparent;
+  cursor: pointer;
+  display:flex;
+  flex-direction:column;
+  gap: 4px;
+}
+
+.suggestItem:hover{
+  background: rgba(0,0,0,.03);
+}
+
+.suggestTitle{
+  font-weight: 950;
+  color: rgba(11,18,32,.92);
+}
+
+.suggestMeta{
+  font-size: 12px;
+  color: rgba(11,18,32,.60);
+  font-weight: 850;
 }
 
 .body{
@@ -137,9 +210,9 @@
 }
 
 .tabOn{
-  background: rgba(17,17,17,.06);
-  border-color: rgba(17,17,17,.18);
-  box-shadow: 0 0 0 4px var(--focus);
+  background: rgba(34,197,94,.12);
+  border-color: rgba(34,197,94,.35);
+  box-shadow: 0 0 0 3px rgba(34,197,94,.10) inset;
 }
 
 /* =================== Main =================== */
@@ -225,9 +298,6 @@
   flex-wrap: wrap;
 }
 
-/* Primary should be ORANGE for "Änderungen speichern" use-case.
-   Deine JSX setzt aktuell styles.primary. Ich mache primary orange (neutral-professional),
-   und du kannst optional primaryHot noch kräftiger setzen. */
 .primary{
   height: 44px;
   padding: 0 16px;
@@ -247,26 +317,19 @@
   box-shadow: 0 16px 32px rgba(234,88,12,.26);
 }
 
-/* extra “HOT” (falls du später class togglest) */
-.primaryHot{
-  background: var(--hot2);
-  border-color: rgba(234,88,12,.40);
-  box-shadow: 0 18px 36px rgba(234,88,12,.30);
-}
-
-.danger{
+.ghost{
   height: 44px;
   padding: 0 16px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--dangerStroke);
-  background: var(--dangerBg);
-  color: rgba(160, 21, 26, .95);
+  border: 1px solid rgba(0,0,0,.14);
+  background: rgba(255,255,255,.92);
+  color: rgba(11,18,32,.86);
   font-weight: 950;
-  cursor: pointer;
+  cursor:pointer;
 }
 
 .primary:disabled,
-.danger:disabled{
+.ghost:disabled{
   opacity: .55;
   cursor: not-allowed;
   transform: none;
@@ -280,9 +343,9 @@
 }
 
 .panelTop{
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -294,35 +357,9 @@
   color: var(--text);
 }
 
-/* Search bar a bit more compact and “liveboard-like” */
-.searchWrap{
-  min-width: 280px;
-  flex: 0 1 320px;
-}
-
-@media (max-width: 760px){
-  .searchWrap{ min-width: 0; flex: 1 1 100%; }
-}
-
-.search{
-  width: 100%;
-  height: 40px;
-  padding: 0 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--stroke2);
-  background: rgba(255,255,255,.96);
-  outline: none;
-  color: var(--text);
-  font-weight: 850;
-}
-
-.search:focus{
-  border-color: rgba(17,17,17,.22);
-  box-shadow: 0 0 0 4px var(--focus);
-}
-
 /* =================== Chips =================== */
 .chipsRow{
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -345,9 +382,112 @@
 }
 
 .chipOn{
-  background: rgba(17,17,17,.06);
-  border-color: rgba(17,17,17,.18);
-  box-shadow: 0 0 0 4px var(--focus);
+  background: rgba(34,197,94,.12);
+  border-color: rgba(34,197,94,.35);
+  box-shadow: 0 0 0 3px rgba(34,197,94,.10) inset;
+}
+
+/* "Alle anzeigen" top-right – same style as favToggle */
+.chipGhostTopRight{
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.14);
+  background: rgba(255,255,255,.92);
+  color: rgba(11,18,32,.86);
+  font-weight: 950;
+  cursor:pointer;
+}
+.chipGhostTopRight:hover{
+  background: rgba(255,255,255,.98);
+}
+
+/* =================== Favorites block =================== */
+.favBlock{
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.62);
+  padding: 12px;
+}
+
+.favTop{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.favTitle{
+  font-weight: 950;
+  color: rgba(11,18,32,.90);
+}
+
+.favToggle{
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.14);
+  background: rgba(255,255,255,.92);
+  color: rgba(11,18,32,.86);
+  font-weight: 950;
+  cursor:pointer;
+}
+.favToggle:hover{ background: rgba(255,255,255,.98); }
+
+.favGrid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 10px;
+}
+
+@media (min-width: 900px){
+  .favGrid{ grid-template-columns: repeat(3, minmax(0,1fr)); }
+}
+
+.favCard{
+  border-radius: 18px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.84);
+  box-shadow: var(--shadow2);
+  padding: 12px;
+  cursor:pointer;
+  display:grid;
+  gap: 6px;
+  text-align:left;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.favCard:hover{ transform: translateY(-1px); }
+
+.favCardOn{
+  background: rgba(34,197,94,.12);
+  border-color: rgba(34,197,94,.35);
+  box-shadow: var(--glowGreen);
+}
+
+.favCardTitle{
+  font-weight: 950;
+  color: rgba(11,18,32,.92);
+  overflow-wrap:anywhere;
+}
+
+.favCardMeta{
+  font-size: 12px;
+  color: rgba(11,18,32,.62);
+  font-weight: 850;
+}
+
+.favEmpty{
+  padding: 12px;
+  color: rgba(11,18,32,.60);
+  font-weight: 900;
+  border-radius: 16px;
+  border: 1px dashed rgba(11,18,32,.18);
+  background: rgba(255,255,255,.70);
 }
 
 /* =================== List box =================== */
@@ -378,17 +518,15 @@
   background: rgba(255,255,255,.78);
   box-shadow: var(--shadow2);
   min-width: 0;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease;
 }
 
-/* Selected service card: nice light green, readable */
+.item:hover{ transform: translateY(-1px); }
+
 .itemOn{
-  border-color: var(--okStroke);
-  background: var(--okBg);
-}
-
-.itemOnOk{
-  border-color: var(--okStroke);
-  background: var(--okBg);
+  background: rgba(34,197,94,.12);
+  border-color: rgba(34,197,94,.35);
+  box-shadow: var(--glowGreen);
 }
 
 .itemWarn{
@@ -414,6 +552,8 @@
   font-weight: 850;
 }
 
+.miniMuted{ color: transparent; }
+
 .inlineQtyTag{
   display:inline-flex;
   align-items:center;
@@ -427,9 +567,7 @@
   font-weight: 950;
 }
 
-/* meta chips */
 .warnTag{
-  margin-left: 10px;
   display: inline-flex;
   align-items: center;
   height: 20px;
@@ -442,98 +580,12 @@
   font-weight: 950;
 }
 
-.catTag{
-  margin-left: 10px;
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(0,0,0,.10);
-  background: rgba(0,0,0,.04);
-  color: rgba(11,18,32,.78);
-  font-size: 12px;
-  font-weight: 950;
-}
-
 .itemRight{
   display:flex;
   align-items:center;
   gap: 10px;
   flex: 0 0 auto;
 }
-
-/* =================== Stepper (Kompakt, Liveboard-like) ===================
-   Deine JSX nutzt: inlineStepper + stepBtn + stepVal.
-   Wir stylen das als kompakte Pill statt riesige Buttons.
-*/
-.inlineStepper{
-  display:inline-flex;
-  align-items:center;
-  gap: 6px;
-  padding: 4px 6px;
-  border-radius: 999px;
-  border: 1px solid var(--pillStroke);
-  background: rgba(255,255,255,.72);
-}
-
-.stepBtn{
-  width: 22px;
-  height: 22px;
-  border-radius: 10px;
-  border: 1px solid rgba(0,0,0,.12);
-  background: rgba(255,255,255,.96);
-  color: rgba(11,18,32,.86);
-  font-weight: 950;
-  cursor:pointer;
-  line-height: 1;
-}
-
-.stepBtn:hover{ background: rgba(255,255,255,.99); }
-
-.stepVal{
-  min-width: 18px;
-  text-align:center;
-  font-weight: 950;
-  color: rgba(11,18,32,.90);
-  font-size: 12px;
-}
-
-/* keep your compact variants if you ever use them */
-.inlineStepperCompact{ composes: inlineStepper; }
-.stepBtnSm{ composes: stepBtn; }
-.stepValSm{ composes: stepVal; }
-
-/* =================== Item buttons =================== */
-.itemBtn{
-  height: 38px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(17,17,17,.22);
-  background: var(--black);
-  color: #fff;
-  font-weight: 950;
-  cursor: pointer;
-}
-
-.itemBtnOn{
-  background: rgba(255,255,255,.92);
-  color: rgba(11,18,32,.86);
-  border-color: rgba(11,18,32,.18);
-}
-
-.itemBtnGhost{
-  height: 38px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid var(--stroke2);
-  background: rgba(255,255,255,.92);
-  color: rgba(11,18,32,.86);
-  font-weight: 950;
-  cursor: pointer;
-}
-
-.productBtns{ display: flex; gap: 10px; flex-wrap: wrap; }
 
 /* =================== Staff panel =================== */
 .staffGrid{
@@ -549,66 +601,137 @@
   background: rgba(255,255,255,.78);
   box-shadow: var(--shadow2);
   padding: 12px;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.staffCard:hover{ transform: translateY(-1px); }
+
+.staffCardOn{
+  border-color: rgba(34,197,94,.35);
+  box-shadow: var(--glowGreen);
+  background: rgba(255,255,255,.82);
 }
 
-.staffHead{
+.staffCardNeed{
+  border-color: rgba(249,115,22,.30);
+  box-shadow: var(--glowOrange);
+  background: rgba(255,255,255,.82);
+}
+
+/* Head = clickable open/close (no separate "Öffnen" button) */
+.staffHeadBtn{
+  width: 100%;
   display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  padding: 4px 2px 10px;
+  cursor:pointer;
+}
+
+.staffServiceTitle{
+  font-size: 14px;
+  font-weight: 950;
+  color: rgba(11,18,32,.92);
+  letter-spacing: -0.01em;
+  text-align:left;
+  overflow-wrap:anywhere;
+}
+
+.staffHeadRight{
+  width: 32px;
+  height: 32px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.92);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color: rgba(11,18,32,.78);
+}
+
+.quickRow{
+  margin-top: 2px;
+  display:grid;
   gap: 8px;
-  align-items:baseline;
-  margin-bottom: 10px;
-  color: rgba(11,18,32,.86);
-  font-weight: 900;
 }
 
-/* ordered services: chips style */
-.staffServices{
-  margin-top: 10px;
-  padding: 10px;
-  border-radius: 16px;
-  border: 1px solid rgba(0,0,0,.08);
-  background: rgba(255,255,255,.74);
-}
-
-.staffServicesEmpty{
-  color: rgba(11,18,32,.58);
-  font-weight: 900;
+.quickLabel{
   font-size: 12px;
+  color: rgba(11,18,32,.62);
+  font-weight: 950;
 }
 
-.staffServicesChips{
+.quickChips{
   display:flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.staffServiceChip{
-  display:inline-flex;
-  align-items:center;
-  height: 22px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(0,0,0,.10);
-  background: rgba(0,0,0,.03);
-  color: rgba(11,18,32,.80);
-  font-weight: 950;
-  font-size: 12px;
-}
-
-.select{
-  width: 100%;
-  height: 40px;
+.quickChip{
+  height: 32px;
   padding: 0 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--stroke2);
-  background: rgba(255,255,255,.96);
-  outline: none;
-  font-weight: 850;
-  color: var(--text);
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.92);
+  color: rgba(11,18,32,.86);
+  font-weight: 950;
+  cursor:pointer;
 }
 
-.select:focus{
-  border-color: rgba(17,17,17,.22);
-  box-shadow: 0 0 0 4px var(--focus);
+.quickChipOn{
+  background: rgba(34,197,94,.12);
+  border-color: rgba(34,197,94,.35);
+  box-shadow: 0 0 0 3px rgba(34,197,94,.10) inset;
+}
+
+.staffSearchRow{
+  margin-top: 10px;
+}
+
+.staffList{
+  margin-top: 10px;
+  display:grid;
+  gap: 8px;
+}
+
+/* staff button modern */
+.staffPick{
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.92);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding: 0 12px;
+  cursor:pointer;
+  font-weight: 950;
+  color: rgba(11,18,32,.90);
+  transition: transform 140ms ease, background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.staffPick:hover{
+  background: rgba(0,0,0,.03);
+  transform: translateY(-1px);
+}
+
+.staffPickOn{
+  background: rgba(34,197,94,.12);
+  border-color: rgba(34,197,94,.35);
+  box-shadow: 0 0 0 3px rgba(34,197,94,.10) inset;
+}
+
+.staffPickName{
+  letter-spacing: -0.01em;
+  font-weight: 950;
+}
+
+.staffPickMeta{
+  font-size: 12px;
+  color: rgba(11,18,32,.62);
+  font-weight: 950;
 }
 
 .small{
@@ -652,7 +775,7 @@
   white-space: pre-wrap;
 }
 
-/* =================== Cart sub tabs =================== */
+/* =================== Sub tabs =================== */
 .browserTabs{
   position: relative;
   display:flex;
@@ -687,10 +810,6 @@
   gap: 10px;
 }
 
-.browserTab:hover{
-  background: rgba(255,255,255,.86);
-}
-
 .browserTabOn{
   background: rgba(255,255,255,.96);
   border-color: rgba(0,0,0,.14);
@@ -713,84 +832,73 @@
   color: rgba(11,18,32,.70);
 }
 
-/* =================== Table =================== */
-.tableWrap{
+/* =================== Summary list =================== */
+.summaryWrap{
   border-radius: 0 18px 18px 18px;
   border: 1px solid rgba(0,0,0,.10);
   background: rgba(255,255,255,.96);
   overflow: hidden;
 }
 
-.table{
-  width: 100%;
-  border-collapse: collapse;
+.summaryList{
+  display:grid;
+  gap: 0;
 }
 
-.table thead th{
-  text-align: left;
-  font-size: 12px;
-  color: rgba(11,18,32,.62);
-  font-weight: 950;
-  padding: 12px 12px;
-  border-bottom: 1px solid rgba(0,0,0,.06);
-  background: rgba(0,0,0,.02);
-}
-
-.table tbody td{
-  padding: 12px 12px;
+.sumRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 12px;
   border-bottom: 1px solid rgba(0,0,0,.05);
-  vertical-align: middle;
-  color: rgba(11,18,32,.88);
+}
+
+.sumLeft{
+  display:grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sumTitle{
+  font-weight: 950;
+  color: rgba(11,18,32,.92);
+  overflow-wrap:anywhere;
+}
+
+.sumMeta{
+  font-size: 12px;
+  color: rgba(11,18,32,.58);
   font-weight: 850;
 }
 
-.thRight{ text-align: right; }
-.tdRight{ text-align: right; }
-.tdMuted{ color: rgba(11,18,32,.62); font-weight: 850; }
-
-.tdTitle{ font-weight: 950; color: rgba(11,18,32,.92); }
-.tdSub{ margin-top: 3px; font-size: 12px; color: rgba(11,18,32,.52); font-weight: 850; }
-
-.tdEmpty{
-  padding: 16px 12px;
-  color: rgba(11,18,32,.62);
-  font-weight: 900;
+.sumRight{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  flex: 0 0 auto;
 }
 
-/* qty cell: use compact pill stepper (like liveboard) */
-.qtyCell{
+/* hidden price */
+.hiddenPrice{
+  min-width: 132px;
+  display:flex;
+  justify-content:flex-end;
+}
+
+.hiddenPriceHint{
+  height: 34px;
   display:inline-flex;
   align-items:center;
-  gap: 6px;
-  padding: 4px 6px;
+  padding: 0 12px;
   border-radius: 999px;
-  border: 1px solid var(--pillStroke);
+  border: 1px dashed rgba(0,0,0,.18);
   background: rgba(0,0,0,.02);
-}
-
-.qtyBtn{
-  width: 22px;
-  height: 22px;
-  border-radius: 10px;
-  border: 1px solid rgba(0,0,0,.12);
-  background: rgba(255,255,255,.98);
-  color: rgba(11,18,32,.86);
+  color: rgba(11,18,32,.62);
   font-weight: 950;
-  cursor:pointer;
-  line-height: 1;
-}
-
-.qtyBtn:hover{ background: rgba(255,255,255,.99); }
-
-.qtyVal{
-  min-width: 18px;
-  text-align:center;
-  font-weight: 950;
-  color: rgba(11,18,32,.90);
   font-size: 12px;
 }
 
-/* price */
 .priceCell{
   display:inline-flex;
   align-items:center;
@@ -798,8 +906,22 @@
   justify-content:flex-end;
 }
 
+.priceToggleIcon{
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.96);
+  color: rgba(11,18,32,.76);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+}
+.priceToggleIcon:hover{ background: rgba(0,0,0,.03); }
+
 .priceInput{
-  width: 92px;
+  width: 82px;
   height: 34px;
   padding: 0 10px;
   border-radius: 12px;
@@ -821,68 +943,25 @@
   font-weight: 950;
 }
 
-.rowAction{
-  height: 34px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(0,0,0,.14);
-  background: rgba(0,0,0,.90);
-  color: #fff;
-  font-weight: 950;
-  cursor: pointer;
-}
-
-.rowActionGhost{
-  height: 34px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(0,0,0,.14);
-  background: rgba(255,255,255,.92);
-  color: rgba(11,18,32,.86);
-  font-weight: 950;
-  cursor: pointer;
-}
-
-.tableHint{
-  padding: 10px 12px;
-  font-size: 12px;
-  color: rgba(11,18,32,.52);
-  font-weight: 850;
-}
-
-/* =================== Cart foot ===================
-   Du willst “Wunsch Mitarbeiter” unten weg.
-   In JSX ist es cartFootLeft. Wir verstecken es komplett.
-*/
-.cartFoot{
+.sumActions{
   display:flex;
-  justify-content:flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 12px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.70);
-}
-
-.cartFootLeft{ display:none !important; }
-
-.cartFootRight{
-  min-width: 240px;
-  display:grid;
   gap: 8px;
 }
 
-.cartTotalRow{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  padding: 10px 12px;
+.rowActionDanger{
+  width: 40px;
+  height: 40px;
   border-radius: 14px;
-  border: 1px solid rgba(0,0,0,.10);
-  background: rgba(17,17,17,.06);
-  font-weight: 950;
+  border: 1px solid rgba(0,0,0,.14);
+  background: rgba(0,0,0,.92);
+  color: #fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
 }
+.rowActionDanger:hover{ transform: translateY(-1px); }
+
 
 /* =================== Misc =================== */
 .empty{
@@ -909,8 +988,719 @@
   .body{ padding: 12px; }
   .name{ font-size: 15px; }
   .primary{ width: 100%; }
-  .sumBarRight{ font-size: 16px; }
-  .select{ width: 100%; }
   .item{ align-items: flex-start; }
   .itemRight{ flex-wrap: wrap; justify-content: flex-end; }
+  .globalSearch{ max-width: none; }
+  .chipGhostTopRight{ position: static; margin-left: auto; }
+}
+/* ===== Mitarbeiter: Abschnitt-Titel (Behandlungen / Produkte) ===== */
+.staffSectionTitle{
+  margin-top: 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(11,18,32,.55);
+}
+/* ===============================
+   FIX PACK (Apple-like UI polish)
+   Append this at the END of file
+================================ */
+
+/* Panel header: title left, action right (Alle anzeigen oben rechts) */
+.panelTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+}
+
+/* Left tabs: label + count pill */
+.tab{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+
+  width:100%;
+  text-align:left;
+}
+
+/* Apple-like pill for counts (re-uses existing class name from your JSX) */
+.browserTabCount{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+
+  min-width: 26px;
+  height: 20px;
+  padding: 0 8px;
+
+  border-radius: 999px;
+  border: 1px solid rgba(15,23,42,.12);
+  background: rgba(255,255,255,.85);
+
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 700;
+  color: rgba(11,18,32,.72);
+
+  box-shadow: 0 1px 0 rgba(2,8,23,.03);
+}
+
+.tabOn .browserTabCount{
+  border-color: rgba(34,197,94,.28);
+  background: rgba(34,197,94,.10);
+  color: rgba(11,18,32,.92);
+}
+
+/* Make "Alle anzeigen" consistent everywhere (same as favToggle look) */
+.favToggle{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+
+  border: 1px solid rgba(15,23,42,.14);
+  background: rgba(255,255,255,.78);
+  color: rgba(11,18,32,.82);
+
+  font-weight: 700;
+  font-size: 13px;
+
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.favToggle:hover{
+  background: rgba(255,255,255,.92);
+  border-color: rgba(15,23,42,.18);
+}
+
+.favToggle:active{
+  transform: scale(.98);
+}
+
+/* ===== Summary action icons: Trash + Restore identical look (NO green) ===== */
+.sumActions{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+/* Use a single “danger neutral” action style (works for Trash & Restore now) */
+.rowActionDanger,
+.rowActionRestore{
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+
+  border: 1px solid rgba(15,23,42,.12);
+  background: rgba(255,255,255,.82);
+
+  color: rgba(11,18,32,.88);
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.rowActionDanger:hover,
+.rowActionRestore:hover{
+  background: rgba(255,255,255,.96);
+  border-color: rgba(15,23,42,.18);
+}
+
+.rowActionDanger:active,
+.rowActionRestore:active{
+  transform: scale(.98);
+}
+
+/* Make icons look crisp and same visual weight */
+.rowActionDanger svg,
+.rowActionRestore svg{
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.2;
+}
+
+/* ===== Price “X” close button (modern + minimal) ===== */
+.priceToggleIcon{
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+
+  border: 1px solid rgba(15,23,42,.12);
+  background: rgba(255,255,255,.85);
+
+  color: rgba(11,18,32,.82);
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.priceToggleIcon:hover{
+  background: rgba(255,255,255,.96);
+  border-color: rgba(15,23,42,.18);
+}
+
+.priceToggleIcon:active{
+  transform: scale(.98);
+}
+
+/* Make hidden price icon area feel “button-like” and consistent */
+.hiddenPriceHint{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+
+  border: 1px dashed rgba(15,23,42,.18);
+  background: rgba(255,255,255,.70);
+}
+
+/* Sticky footer spacing after removing sumBar */
+.stickyFooter{
+  display:flex;
+  flex-direction:column;
+  gap: 12px;
+}
+
+/* Optional: slightly tighter sidebar tab list like Apple */
+.tabs{
+  gap: 10px;
+}
+.rowActionDanger svg,
+.rowActionRestore svg{
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.3;
+}
+/* ===== Left Tabs count badge (Behandlung/Produkte) ===== */
+.tabCount{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+
+  min-width: 22px;
+  height: 20px;
+  padding: 0 8px;
+
+  border-radius: 999px;
+  border: 1px solid rgba(15,23,42,.12);
+  background: rgba(0,0,0,.04);
+
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 950;
+  color: rgba(11,18,32,.70);
+}
+
+.tabOn .tabCount{
+  border-color: rgba(34,197,94,.28);
+  background: rgba(34,197,94,.10);
+  color: rgba(11,18,32,.92);
+}
+/* Make icons look crisp and same visual weight */
+.rowActionDanger svg,
+.rowActionRestore svg{
+  width: 44px;
+  height: 44px;
+  stroke-width: 2.3;
+}
+
+/* Left Tabs count badge (Behandlung/Produkte) */
+.tabCount{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+
+  min-width: 22px;
+  height: 20px;
+  padding: 0 8px;
+
+  border-radius: 999px;
+  border: 1px solid rgba(15,23,42,.12);
+  background: rgba(0,0,0,.04);
+
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 950;
+  color: rgba(11,18,32,.70);
+}
+
+.tabOn .tabCount{
+  border-color: rgba(34,197,94,.28);
+  background: rgba(34,197,94,.10);
+  color: rgba(11,18,32,.92);
+}
+
+/* ===== Summary: Sections (Behandlungen / Produkte) ===== */
+.sumSectionHead{
+  position: static; /* fühlt sich beim Scrollen “geführt” an */
+  top: 0;
+  z-index: 3;
+
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(10px);
+}
+
+.sumSectionTitle{
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .10em;
+  text-transform: uppercase;
+  color: rgba(11,18,32,.58);
+}
+
+.sumSectionCount{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+
+  min-width: 24px;
+  height: 20px;
+  padding: 0 8px;
+
+  border-radius: 999px;
+  border: 1px solid rgba(15,23,42,.12);
+  background: rgba(0,0,0,.04);
+
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 950;
+  color: rgba(11,18,32,.72);
+}
+
+.sumSectionDivider{
+  height: 10px;
+  background: rgba(0,0,0,.03);
+  border-top: 1px solid rgba(0,0,0,.06);
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+/* =========================================================
+   COMPACT MODE – Profile-like density (SAFE OVERRIDES)
+   Append at END of KioskOrderEmbed.module.css
+   ========================================================= */
+
+/* ---- Outer shell: smaller radius & tighter ---- */
+.wrap{
+  border-radius: 18px;                 /* war var(--radius-xl) */
+}
+
+/* ---- Header: smaller ---- */
+.header{
+  padding: 12px 14px;                  /* war 16px 18px */
+}
+
+.kicker{
+  font-size: 10px;
+  letter-spacing: .10em;
+}
+
+.name{
+  margin-top: 4px;
+  font-size: 14px;                     /* war 15px */
+}
+
+/* ---- Search: smaller ---- */
+.search{
+  height: 38px;                        /* war 40px */
+  border-radius: 14px;                 /* statt radius-md manchmal zu rund */
+  font-size: 14px;
+}
+
+/* Suggest dropdown: slightly tighter */
+.suggestBox{
+  border-radius: 16px;
+}
+.suggestItem{
+  padding: 9px 12px;
+}
+.suggestMeta{
+  font-size: 11px;
+}
+
+/* ---- Main layout: tighter padding ---- */
+.body{
+  gap: 10px;
+  padding: 12px;                       /* war 14px */
+}
+
+/* Desktop sidebar a bit slimmer (wie Profile) */
+@media (min-width: 981px){
+  .body{
+    grid-template-columns: 240px 1fr;   /* war 260px */
+  }
+}
+
+/* ---- Tabs box: smaller ---- */
+.tabs{
+  padding: 8px;
+  gap: 8px;
+  border-radius: 16px;
+}
+
+.tab{
+  height: 36px;                        /* war 40px */
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: 999px;
+}
+
+/* Tab count badge (wenn vorhanden) */
+.tabCount{
+  height: 18px;
+  min-width: 20px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+
+/* ---- Main panel: smaller paddings ---- */
+.main{
+  border-radius: 16px;
+}
+
+.mainScroll{
+  padding: 12px;                       /* war 14px */
+}
+
+/* Desktop scroll maxheight minimal reduzieren (gefühlt kompakter) */
+@media (min-width: 981px){
+  .main{
+    max-height: calc(100dvh - 18px - 14px);
+  }
+}
+
+/* ---- Panel blocks: less air ---- */
+.panel{
+  gap: 10px;
+}
+
+.panelTitle{
+  font-size: 14px;                     /* war 15px */
+}
+
+/* ---- Chips row: smaller ---- */
+.chipsRow{
+  padding: 10px;
+  border-radius: 16px;
+  gap: 8px;
+}
+
+.chip{
+  height: 34px;                        /* war 38px */
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.chipGhostTopRight{
+  height: 32px;
+  padding: 0 10px;
+}
+
+/* ---- Favorites: tighter ---- */
+.favBlock{
+  padding: 10px;
+  border-radius: 16px;
+}
+
+.favTop{
+  margin-bottom: 8px;
+}
+
+.favToggle{
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.favCard{
+  border-radius: 16px;
+  padding: 10px;
+  gap: 5px;
+}
+
+.favCardMeta{
+  font-size: 11px;
+}
+
+/* ---- ListBox & items: compact rows ---- */
+.listBox{
+  padding: 10px;
+  border-radius: 16px;
+}
+
+.items{
+  gap: 8px;
+  max-height: min(620px, 56dvh);       /* war 720/60dvh */
+}
+
+.item{
+  padding: 10px;                        /* war 12px */
+  border-radius: 16px;
+}
+
+.itemTitle{
+  font-size: 14px;
+}
+
+.itemMeta{
+  font-size: 11px;
+}
+
+.inlineQtyTag,
+.warnTag{
+  height: 18px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+/* ---- Staff cards: compact ---- */
+.staffCard{
+  border-radius: 16px;
+  padding: 10px;
+}
+
+.staffHeadRight{
+  width: 30px;
+  height: 30px;
+  border-radius: 12px;
+}
+
+.staffServiceTitle{
+  font-size: 13px;
+}
+
+.quickChip{
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.staffPick{
+  height: 40px;                        /* war 44px */
+  border-radius: 14px;
+}
+
+/* ---- Textarea / notes: smaller ---- */
+.textarea{
+  min-height: 120px;                   /* war 140px */
+  padding: 10px;
+  font-size: 14px;
+}
+
+.noteReadOnlyCard{
+  padding: 10px;
+  border-radius: 16px;
+}
+
+.noteReadOnlyTitle{
+  font-size: 11px;
+}
+
+.noteReadOnlyText{
+  font-size: 13px;
+}
+
+/* ---- Sub tabs (browser-like): tighter ---- */
+.browserTab{
+  height: 34px;                        /* war 38px */
+  padding: 0 12px;
+}
+
+.browserTabCount{
+  height: 18px;
+  min-width: 18px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+
+/* ---- Summary rows: compact ---- */
+.sumRow{
+  padding: 10px;                        /* war 12px */
+}
+
+.sumMeta{
+  font-size: 11px;
+}
+
+/* price controls smaller (cleaner) */
+.priceInput{
+  height: 32px;
+  width: 78px;
+  border-radius: 12px;
+}
+
+.priceToggleIcon{
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+}
+
+/* action icons (trash/restore) not huge */
+.rowActionDanger,
+.rowActionRestore{
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+}
+.rowActionDanger svg,
+.rowActionRestore svg{
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.2;
+}
+
+/* ---- Sticky footer: smaller ---- */
+.stickyFooter{
+  padding: 10px 12px;
+  gap: 10px;
+}
+
+.sumBar{
+  padding: 10px 12px;
+  border-radius: 16px;
+}
+
+.sumBarMeta{
+  font-size: 11px;
+}
+
+.primary,
+.ghost{
+  height: 40px;                        /* war 44px */
+  padding: 0 14px;
+  border-radius: 14px;
+  font-size: 14px;
+}
+
+/* ---- Mobile: even tighter ---- */
+@media (max-width: 520px){
+  .header{ padding: 12px; }
+  .body{ padding: 10px; }
+  .mainScroll{ padding: 10px; }
+
+  .tab{ height: 34px; padding: 0 12px; }
+  .chip{ height: 32px; }
+
+  .primary{ width: 100%; }
+}
+/* =========================================================
+   FIX: Search dropdown + Favorites too big (SAFE OVERRIDES)
+   Append at END of KioskOrderEmbed.module.css
+   ========================================================= */
+
+/* ---------- Search dropdown (suggestBox) compact ---------- */
+.suggestBox{
+  border-radius: 14px;
+}
+
+.suggestItem{
+  padding: 8px 10px;                 /* weniger Höhe */
+  gap: 2px;
+}
+
+.suggestTitle{
+  font-size: 13px;                    /* war optisch zu groß */
+  line-height: 1.15;
+  font-weight: 950;
+}
+
+.suggestMeta{
+  font-size: 11px;
+  line-height: 1.15;
+  font-weight: 850;
+}
+
+/* optional: lange Texte nicht 5 Zeilen */
+.suggestTitle,
+.suggestMeta{
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---------- Favorites / Beliebt Karten kleiner ---------- */
+.favBlock{
+  padding: 10px;
+  border-radius: 16px;
+}
+
+.favGrid{
+  gap: 8px;
+}
+
+.favCard{
+  padding: 10px;
+  border-radius: 16px;
+  gap: 4px;
+}
+
+.favCardTitle{
+  font-size: 13px;
+  line-height: 1.15;
+}
+
+.favCardMeta{
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+/* ---------- Item cards (wenn Beliebt auch dort rein geht) ---------- */
+.item{
+  padding: 10px;
+  border-radius: 16px;
+}
+
+.itemTitle{
+  font-size: 14px;
+  line-height: 1.15;
+}
+
+.itemMeta{
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+/* ---------- Chips in Beliebt/Filter etwas kleiner ---------- */
+.chipsRow{
+  padding: 10px;
+  gap: 8px;
+  border-radius: 16px;
+}
+.chip{
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+/* ---------- FIX: du hast SVGs später versehentlich auf 44px gesetzt ---------- */
+.rowActionDanger svg,
+.rowActionRestore svg{
+  width: 18px !important;
+  height: 18px !important;
+  stroke-width: 2.2 !important;
+}
+.rowActionDanger,
+.rowActionRestore{
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
 }

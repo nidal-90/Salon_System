@@ -31,6 +31,25 @@ function fmtDuration(ms) {
   if (h > 0) return `${h}:${pad(m)}:${pad(s)}`;
   return `${m}:${pad(s)}`;
 }
+function formatEUR(n) {
+  const v = Number(n || 0);
+  try {
+    return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(v);
+  } catch {
+    return `${v.toFixed(2)} €`;
+  }
+}
+
+// live tick as epoch ms (for modal timers)
+function useNowTick(enabled) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!enabled) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [enabled]);
+  return now;
+}
 
 function msBetween(aIso, bIso, fallbackMs = 0) {
   const a = safeStr(aIso);
@@ -206,6 +225,214 @@ export default function ReceptionLiveboardPage() {
     members: [],
   });
 
+  // Premium “Kundenkarte” Modal (für Name-Click UND Aktion-Click)
+const [visitSheet, setVisitSheet] = useState({
+  open: false,
+  mode: "", // "waiting" | "active" | "checkout"
+  rowId: "",
+  visitId: "",
+  areaId: "",
+  title: "",
+  sub: "",
+  status: "",
+  checkInAt: "",
+  waitingSince: "",
+  activeSince: "",
+  areaName: "",
+  wishServiceTitle: "",
+  preferredStaffName: "",
+  assignedStaffName: "",
+  note: "",
+  services: [],
+  products: [],
+  members: [],
+  profile: null,
+  history: [],
+  liveboard: [],
+  staffValue: "",
+});
+
+function closeVisitSheet() {
+  setVisitSheet((s) => ({ ...s, open: false }));
+}
+
+// lädt deine bestehenden Daten (profil/history/today/liveboard/members) + baut “ViewModel”
+async function openVisitSheetFromRow(rowOrCheckout, modeHint = "") {
+  const visitId = String(rowOrCheckout?.visitId || "");
+  if (!visitId) return;
+
+  const visit = await db.visits.get(visitId).catch(() => null);
+  const customerId = visit?.customerId ? String(visit.customerId) : "";
+
+  const title =
+    safeStr(visit?.displayName) ||
+    safeStr(rowOrCheckout?.displayName) ||
+    safeStr(rowOrCheckout?._displayName) ||
+    `Visit ${visitId.slice(-6)}`;
+
+  const isCheckout = !!rowOrCheckout?.checkoutAt;
+  const status = isCheckout ? "checkout" : safeStr(rowOrCheckout?._status) || safeStr(modeHint) || "";
+
+  // “Subline”: Gruppe/Teilnehmer (ohne Liste zu überladen)
+  const isGroup = String(visit?.type || "") === "group";
+  const sub = isGroup ? "Gruppe" : (safeStr(rowOrCheckout?._displaySub) || "");
+
+  // Services/Products/AreaState für HEUTE (Visit)
+  let todayServices = [];
+  let todayProducts = [];
+  let notesByArea = [];
+  let preferredByArea = [];
+  let liveboard = [];
+  let members = [];
+
+  try {
+    const [vs, vp, vas] = await Promise.all([
+      db.visit_services.where("visitId").equals(visitId).toArray().catch(() => []),
+      db.visit_products.where("visitId").equals(visitId).toArray().catch(() => []),
+      db.visit_area_state.where("visitId").equals(visitId).toArray().catch(() => []),
+    ]);
+
+    todayServices = (vs || []).map((s) => ({
+      title: safeStr(s.title),
+      price: Number(s.price || 0) || 0,
+      areaId: String(s.areaId || ""),
+      memberId: safeStr(s.memberId),
+      note: safeStr(s.note),
+    }));
+
+    todayProducts = (vp || []).map((p) => ({
+      title: safeStr(p.title),
+      qty: Number(p.qty || 1) || 1,
+      price: Number(p.price || 0) || 0,
+      memberId: safeStr(p.memberId),
+    }));
+
+    notesByArea = (vas || [])
+      .map((r) => ({
+        areaId: String(r.areaId || ""),
+        areaName: safeStr(areas.find((a) => String(a.id) === String(r.areaId))?.name) || safeStr(r.areaName) || "Bereich",
+        note: safeStr(r.note),
+      }))
+      .filter((x) => !!x.note);
+
+    preferredByArea = (vas || [])
+      .map((r) => ({
+        areaId: String(r.areaId || ""),
+        areaName: safeStr(areas.find((a) => String(a.id) === String(r.areaId))?.name) || safeStr(r.areaName) || "Bereich",
+        preferred: safeStr(r.preferredStaffName) || "—",
+        assigned: safeStr(r.assignedStaffName) || "—",
+        status: safeStr(r.status),
+        startedAt: safeStr(r.startedAt),
+        endedAt: safeStr(r.endedAt),
+      }))
+      .filter((x) => x.areaId);
+
+    liveboard = (liveRows || [])
+      .filter((r) => String(r.visitId || "") === visitId)
+      .map((r) => ({
+        id: String(r.id),
+        areaId: String(r.areaId || ""),
+        areaName: safeStr(r._areaName),
+        status: safeStr(r._status),
+        waitingMs: Number(r._waitingMs || 0),
+        activeMs: Number(r._activeMs || 0),
+        staff: safeStr(r._assignedStaffName) || safeStr(r._preferredStaffName) || "",
+        checkInAt: safeStr(r._checkInAt),
+        activeSince: safeStr(r._activeSince),
+      }))
+      .sort((a, b) => String(a.areaName).localeCompare(String(b.areaName)));
+
+  } catch {
+    // ignore
+  }
+
+  try {
+    if ((db?.tables || []).some((t) => t?.name === "visit_members")) {
+      const mm = await db.visit_members.where("visitId").equals(visitId).toArray().catch(() => []);
+      members = (mm || [])
+        .map((x) => safeStr(x.displayName) || safeStr(x.name) || safeStr(x.phone))
+        .filter(Boolean);
+    }
+  } catch {
+    members = [];
+  }
+
+  // Profile
+  let profile = null;
+  try {
+    if (customerId && (db?.tables || []).some((t) => t?.name === "customers")) {
+      profile = await db.customers.get(customerId).catch(() => null);
+    }
+  } catch {
+    profile = null;
+  }
+  const finalProfile = profile
+    ? { ...profile, displayName: safeStr(profile.displayName) || title }
+    : { id: customerId, displayName: title, phone: "", instagram: "", email: "" };
+
+  // History (alte Visits)
+  let history = [];
+  try {
+    if (customerId) {
+      const all = await db.visits.where("customerId").equals(customerId).toArray().catch(() => []);
+      history = (all || [])
+        .filter((v) => String(v.id || "") !== visitId)
+        .map((v) => ({
+          visitId: String(v.id || ""),
+          dateKey: safeStr(v.dateKey),
+          createdAt: safeStr(v.createdAt),
+          note: safeStr(v.note || v.comment || ""),
+          type: safeStr(v.type || ""),
+          status: safeStr(v.status || ""),
+        }))
+        .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+        .slice(0, 60);
+    }
+  } catch {
+    history = [];
+  }
+
+  // “Wunsch Behandlung” für Quick Look: aus row/visits_state/services ableiten
+  const wishServiceTitle =
+    safeStr(rowOrCheckout?._serviceTitles?.[0]) ||
+    (todayServices.length ? todayServices.map((s) => s.title).filter(Boolean).slice(0, 2).join(" · ") : "");
+
+  // Timer anchor
+  const checkInAt = safeStr(rowOrCheckout?._checkInAt) || safeStr(visit?.createdAt);
+  const activeSince = safeStr(rowOrCheckout?._activeSince);
+
+  // Staff default in sheet
+  const rowAssigned = safeStr(rowOrCheckout?.assignedStaffId) || safeStr(rowOrCheckout?._preferredStaffId);
+  const staffValueDefault = safeStr(activeStaffId) || rowAssigned;
+
+  setVisitSheet({
+    open: true,
+    mode: status === "done" ? "checkout" : status || modeHint || tab,
+    rowId: String(rowOrCheckout?.id || ""),
+    visitId,
+    areaId: String(rowOrCheckout?.areaId || ""),
+    title,
+    sub,
+    status,
+    checkInAt,
+    waitingSince: checkInAt,
+    activeSince,
+    areaName: safeStr(rowOrCheckout?._areaName) || "",
+    wishServiceTitle,
+    preferredStaffName: safeStr(rowOrCheckout?._preferredStaffName) || "",
+    assignedStaffName: safeStr(rowOrCheckout?._assignedStaffName) || "",
+    note: safeStr(visit?.note) || safeStr(rowOrCheckout?.note) || "",
+    services: todayServices,
+    products: todayProducts,
+    members,
+    profile: finalProfile,
+    history,
+    liveboard,
+    staffValue: staffValueDefault,
+  });
+}
+
+
   // longest dropdown: waiting vs active
   const [longestMode, setLongestMode] = useState("active"); // active | waiting
 
@@ -225,11 +452,13 @@ export default function ReceptionLiveboardPage() {
   // Escape closes overlays/modals
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === "Escape") {
-        setOverlay({ open: false, title: "", mode: "", items: [], tone: "waiting" });
-        setStatusModal({ open: false, visitId: "" });
-        setCustomerModal((m) => ({ ...m, open: false }));
-      }
+   if (e.key === "Escape") {
+  setOverlay({ open: false, title: "", mode: "", items: [], tone: "waiting" });
+  setStatusModal({ open: false, visitId: "" });
+  setCustomerModal((m) => ({ ...m, open: false }));
+  closeVisitSheet(); // ✅ neu
+}
+
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -717,56 +946,58 @@ export default function ReceptionLiveboardPage() {
     return "";
   }
 
-  async function take(row) {
-    if (!row?.id) return;
+ async function take(row, staffIdOverride = "") {
+  if (!row?.id) return;
 
-    const finalStaffId = ensureStaffOrToast(row);
-    if (!finalStaffId) return;
+  const override = safeStr(staffIdOverride);
+  const finalStaffId = override || ensureStaffOrToast(row);
+  if (!finalStaffId) return;
 
-    setBusyId(row.id);
-    try {
-      const nowIso = new Date().toISOString();
+  setBusyId(row.id);
+  try {
+    const nowIso = new Date().toISOString();
 
-      const s = staff.find((x) => String(x.id) === String(finalStaffId)) || null;
-      const staffName = s ? String(s.name || "") : safeStr(row._assignedStaffName || row._preferredStaffName);
+    const s = staff.find((x) => String(x.id) === String(finalStaffId)) || null;
+    const staffName = s ? String(s.name || "") : safeStr(row._assignedStaffName || row._preferredStaffName);
 
-      // waiting timer: from check-in -> now
-      const waitingStart = safeStr(row._checkInAt);
-      if (waitingStart) {
-        const ms = msBetween(waitingStart, nowIso);
-        const visit = await db.visits.get(String(row.visitId)).catch(() => null);
-        const customerId = visit?.customerId ? String(visit.customerId) : "";
+    // waiting timer: from check-in -> now
+    const waitingStart = safeStr(row._checkInAt);
+    if (waitingStart) {
+      const ms = msBetween(waitingStart, nowIso);
+      const visit = await db.visits.get(String(row.visitId)).catch(() => null);
+      const customerId = visit?.customerId ? String(visit.customerId) : "";
 
-        await logCustomerTimerToHistory({
-          customerId,
-          visitId: row.visitId,
-          areaId: row.areaId,
-          areaName: row._areaName,
-          staffId: finalStaffId,
-          staffName,
-          type: "WAITING_TIMER",
-          startedAt: waitingStart,
-          endedAt: nowIso,
-          durationMs: ms,
-        });
-      }
-
-      await db.visit_area_state.update(row.id, {
-        status: "active",
-        assignedStaffId: finalStaffId || null,
-        assignedStaffName: staffName || "",
-        startedAt: nowIso,
-        endedAt: null,
+      await logCustomerTimerToHistory({
+        customerId,
+        visitId: row.visitId,
+        areaId: row.areaId,
+        areaName: row._areaName,
+        staffId: finalStaffId,
+        staffName,
+        type: "WAITING_TIMER",
+        startedAt: waitingStart,
+        endedAt: nowIso,
+        durationMs: ms,
       });
-
-      showToast("Übernommen. Aktiv-Timer läuft.");
-      await loadBoard();
-    } catch (e) {
-      showToast(String(e?.message || e));
-    } finally {
-      setBusyId("");
     }
+
+    await db.visit_area_state.update(row.id, {
+      status: "active",
+      assignedStaffId: finalStaffId || null,
+      assignedStaffName: staffName || "",
+      startedAt: nowIso,
+      endedAt: null,
+    });
+
+    showToast("Übernommen. Aktiv-Timer läuft.");
+    await loadBoard();
+  } catch (e) {
+    showToast(String(e?.message || e));
+  } finally {
+    setBusyId("");
   }
+}
+
 
   async function finish(row) {
     if (!row?.id) return;
@@ -1398,198 +1629,114 @@ export default function ReceptionLiveboardPage() {
             </div>
 
             {/* Table */}
-            <div className={`${styles.table} ${styles[`tableTone_${tab}`]}`}>
-              {tab === "waiting" ? (
-                <div className={styles.trHeadWaiting}>
-                  <div>{sortHeader("Kunde", "name")}</div>
-                  <div>{sortHeader("Check-in", "checkin")}</div>
-                  <div>{sortHeader("Bereich", "area")}</div>
-                  <div>{sortHeader("Wunsch", "wish")}</div>
-                  <div>{sortHeader("Wunsch MA", "prefStaff")}</div>
-                  <div>{sortHeader("Mitarbeiter", "staff")}</div>
-                  <div className={styles.taRight}>{sortHeader("Warten", "waitingMs")}</div>
-                  <div className={styles.taRight}>Aktion</div>
-                </div>
-              ) : tab === "active" ? (
-                <div className={styles.trHeadActive}>
-                  <div>{sortHeader("Kunde", "name")}</div>
-                  <div>{sortHeader("Check-in", "checkin")}</div>
-                  <div>{sortHeader("Aktiv seit", "activeSince")}</div>
-                  <div>{sortHeader("Bereich", "area")}</div>
-                  <div>{sortHeader("Wunsch", "wish")}</div>
-                  <div>{sortHeader("Wunsch MA", "prefStaff")}</div>
-                  <div>{sortHeader("Mitarbeiter", "staff")}</div>
-                  <div className={styles.taRight}>{sortHeader("Aktiv", "activeMs")}</div>
-                  <div className={styles.taRight}>Aktion</div>
-                </div>
-              ) : (
-                <div className={styles.trHeadCheckout}>
-                  <div>{sortHeader("Kunde", "name")}</div>
-                  <div>{sortHeader("Check-in", "checkin")}</div>
-                  <div>{sortHeader("Aktiv seit", "activeSince")}</div>
-                  <div>{sortHeader("Checkout", "checkoutAt")}</div>
-                  <div className={styles.taRight}>{sortHeader("Warten", "waitingMs")}</div>
-                  <div className={styles.taRight}>{sortHeader("Aktiv", "activeMs")}</div>
-                  <div>Mitarbeiter</div>
-                  <div>Status</div>
-                  <div className={styles.taRight}>Aktion</div>
-                </div>
-              )}
+          <div className={`${styles.table} ${styles[`tableTone_${tab}`]}`}>
+  <div className={styles.trHeadMini}>
+    <div>{sortHeader("Kunde", "name")}</div>
+    <div className={styles.taRight}>Aktion</div>
+  </div>
 
-              <div className={styles.scrollBody}>
-                {tab === "checkout" ? (
-                  checkoutVisits.length === 0 ? (
-                    <div className={styles.empty}>Keine Checkout-Kandidaten gefunden.</div>
-                  ) : (
-                    checkoutVisits.map((v) => {
-                      const warn = !v.allDone;
-                      return (
-                        <div key={v.visitId} className={`${styles.trRowCheckout3} ${styles.rowToneCheckout}`}>
-                          <div className={styles.nameCell}>
-                            <button type="button" className={styles.nameCellBtn} onClick={() => openCustomerModalFromRow(v)} title="Profil öffnen">
-                              <div className={styles.bold}>{v.displayName}</div>
-                              {v.displaySub ? <div className={styles.smallMuted}>{v.displaySub}</div> : null}
-                            </button>
-                          </div>
+  <div className={styles.scrollBody}>
+    {tab === "checkout" ? (
+      checkoutVisits.length === 0 ? (
+        <div className={styles.empty}>Keine Checkout-Kandidaten gefunden.</div>
+      ) : (
+        checkoutVisits.map((v) => (
+          <div key={v.visitId} className={`${styles.trRowMini} ${styles.rowToneCheckout}`}>
+            <button
+              type="button"
+              className={styles.miniNameBtn}
+              onClick={() => openVisitSheetFromRow(v, "checkout")}
+              title="Kundenkarte öffnen"
+            >
+              <div className={styles.miniNameTop}>
+                <span className={styles.bold}>{v.displayName}</span>
+                {v.displaySub ? <span className={styles.miniTag}>{v.displaySub}</span> : null}
+              </div>
+              <div className={styles.miniMeta}>
+                <span className={styles.pill}>Check-in {fmtClock(v.checkInAt)}</span>
+                <span className={styles.pill}>Checkout {fmtClock(v.checkoutAt)}</span>
+                {!v.allDone ? <span className={styles.warnBadge}>Offen ({v.pendingCount})</span> : <span className={styles.okBadge}>Bereit</span>}
+              </div>
+            </button>
 
-                          <div className={styles.mono}>
-                            <span className={styles.pill}>{fmtClock(v.checkInAt)}</span>
-                          </div>
+            <div className={`${styles.taRight} ${styles.actionCell}`}>
+              <button
+                className={styles.btnPrimarySm}
+                type="button"
+                onClick={() => openVisitSheetFromRow(v, "checkout")}
+                title="Details & zur Kasse"
+              >
+                Zur Kasse
+              </button>
+            </div>
+          </div>
+        ))
+      )
+    ) : filteredRows.length === 0 ? (
+      <div className={styles.empty}>Keine Einträge. Prüfe Filter oder Suche.</div>
+    ) : (
+      filteredRows.map((r) => {
+        const isBusy = String(busyId) === String(r.id);
+        const rowTone = r._status === "waiting" ? styles.rowToneWaiting : styles.rowToneActive;
 
-                          <div className={styles.mono}>
-                            <span className={styles.pill}>{fmtClock(v.activeSince)}</span>
-                          </div>
+        return (
+          <div key={r.id} className={`${styles.trRowMini} ${rowTone}`}>
+            <button
+              type="button"
+              className={styles.miniNameBtn}
+              onClick={() => openVisitSheetFromRow(r, tab)}
+              title="Kundenkarte öffnen"
+            >
+              <div className={styles.miniNameTop}>
+                <span className={styles.bold}>{r._displayName}</span>
+                {r._displaySub ? <span className={styles.miniTag}>{r._displaySub}</span> : null}
+              </div>
 
-                          <div className={styles.mono}>
-                            <span className={styles.pill}>{fmtClock(v.checkoutAt)}</span>
-                          </div>
-
-                          <div className={`${styles.taRight} ${styles.mono}`}>
-                            <span className={styles.pill}>{fmtDuration(v.waitingMs)}</span>
-                          </div>
-
-                          <div className={`${styles.taRight} ${styles.mono}`}>
-                            <span className={styles.pill}>{fmtDuration(v.activeMs)}</span>
-                          </div>
-
-                          <div className={styles.staffPlain}>{v.staffName || "—"}</div>
-
-                          <div>
-                            {warn ? (
-                              <button type="button" className={styles.warnBadgeBtn} onClick={() => openStatusModal(v.visitId)} title="Details anzeigen">
-                                Offen ({v.pendingCount})
-                              </button>
-                            ) : (
-                              <span className={styles.okBadge}>Bereit</span>
-                            )}
-                          </div>
-
-                          <div className={`${styles.taRight} ${styles.actionCell}`}>
-                            <button
-                              className={styles.btnPrimarySm}
-                              type="button"
-                              onClick={() => nav(`/reception/checkout?visitId=${encodeURIComponent(v.visitId)}`)}
-                            >
-                              Zur Kasse
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )
-                ) : filteredRows.length === 0 ? (
-                  <div className={styles.empty}>Keine Einträge. Prüfe Filter oder Suche.</div>
+              <div className={styles.miniMeta}>
+                <span className={styles.pill}>Check-in {fmtClock(r._checkInAt)}</span>
+                {tab === "waiting" ? (
+                  <span className={styles.pill}>Warten {fmtDuration(r._waitingMs)}</span>
                 ) : (
-                  filteredRows.map((r) => {
-                    const services = r._serviceTitles || [];
-                    const wish = services.length ? services.slice(0, 2).join(" · ") : "—";
-                    const wishMore = services.length > 2 ? ` +${services.length - 2}` : "";
-
-                    const staffValue = safeStr(r.assignedStaffId || "") || safeStr(r._preferredStaffId || "");
-                    const staffChosen = safeStr(activeStaffId) || staffValue;
-                    const needsStaff = tab === "waiting" && !staffChosen;
-
-                    const isBusy = String(busyId) === String(r.id);
-                    const rowTone = r._status === "waiting" ? styles.rowToneWaiting : styles.rowToneActive;
-
-                    return (
-                      <div key={r.id} className={tab === "waiting" ? `${styles.trRowWaiting} ${rowTone}` : `${styles.trRowActive} ${rowTone}`}>
-                        <div className={styles.nameCell}>{renderNameCell(r)}</div>
-
-                        <div className={styles.mono}>
-                          <span className={styles.pill}>{fmtClock(r._checkInAt)}</span>
-                        </div>
-
-                        {tab === "active" ? (
-                          <div className={styles.mono}>
-                            <span className={styles.pill}>{fmtClock(r._activeSince)}</span>
-                          </div>
-                        ) : null}
-
-                        <div className={styles.plainText}>{renderAreaCell(r._areaName)}</div>
-
-                        <div className={styles.wishCell} title={services.join(" · ")}>
-                          {wish}
-                          {wishMore ? <span className={styles.wishMore}>{wishMore}</span> : null}
-                        </div>
-
-                        <div className={styles.plainText}>{r._preferredStaffName || "—"}</div>
-
-                        <div>
-                          <select
-                            className={`${styles.select} ${needsStaff ? styles.selectRequired : ""}`}
-                            value={staffValue}
-                            onChange={async (e) => {
-                              await setRowStaff(r.id, e.target.value);
-                              await loadBoard();
-                            }}
-                            disabled={isBusy}
-                            title="Zuständigen Mitarbeiter festlegen"
-                          >
-                            <option value="">—</option>
-                            {staff.map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {s.name}
-                              </option>
-                            ))}
-                          </select>
-
-                          {needsStaff ? <div className={styles.requiredHint}>Mitarbeiter wählen</div> : null}
-                        </div>
-
-                        {/* FIX: seconds always visible, and correct column per tab */}
-                        <div className={`${styles.taRight} ${styles.mono}`}>
-                          <span className={styles.pill}>{tab === "waiting" ? fmtDuration(r._waitingMs) : fmtDuration(r._activeMs)}</span>
-                        </div>
-
-                        <div className={`${styles.taRight} ${styles.actionCell}`}>
-                          {tab === "waiting" ? (
-                            <button
-                              className={styles.btnPrimarySm}
-                              type="button"
-                              onClick={() => take(r)}
-                              disabled={isBusy || needsStaff}
-                              title={needsStaff ? "Bitte zuerst Mitarbeiter wählen" : "Übernehmen"}
-                            >
-                              {isBusy ? "…" : "Übernehmen"}
-                            </button>
-                          ) : (
-                            <>
-                              <button className={styles.btnPrimarySm} type="button" onClick={() => finish(r)} disabled={isBusy}>
-                                {isBusy ? "…" : "Fertig"}
-                              </button>
-                              <button className={styles.btnGhostSm} type="button" onClick={() => undoToWaiting(r)} disabled={isBusy}>
-                                Zurück
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
+                  <span className={styles.pill}>Aktiv {fmtDuration(r._activeMs)}</span>
                 )}
               </div>
+            </button>
+
+            <div className={`${styles.taRight} ${styles.actionCell}`}>
+              {tab === "waiting" ? (
+                <button
+                  className={styles.btnPrimarySm}
+                  type="button"
+                  onClick={() => openVisitSheetFromRow(r, "waiting")}
+                  disabled={isBusy}
+                  title="Übernehmen (Mitarbeiter im Modal wählen)"
+                >
+                  {isBusy ? "…" : "Übernehmen"}
+                </button>
+              ) : (
+                <>
+                  <button
+                    className={styles.btnPrimarySm}
+                    type="button"
+                    onClick={() => openVisitSheetFromRow(r, "active")}
+                    disabled={isBusy}
+                    title="Fertig / Zurück im Modal"
+                  >
+                    {isBusy ? "…" : "Fertig"}
+                  </button>
+                  <button className={styles.btnGhostSm} type="button" onClick={() => openVisitSheetFromRow(r, "active")} disabled={isBusy}>
+                    Details
+                  </button>
+                </>
+              )}
             </div>
+          </div>
+        );
+      })
+    )}
+  </div>
+</div>
+
 
             <div className={styles.note}>
               Logik: <b>Warten</b> ab Check-in (visit.createdAt). <b>Aktiv</b> ab “Übernehmen” (startedAt). Sekunden sind immer sichtbar.
@@ -1964,6 +2111,298 @@ export default function ReceptionLiveboardPage() {
           </div>
         </div>
       ) : null}
+         {/* ✅ Premium Kundenkarte (Visit Sheet) */}
+      {visitSheet.open ? (
+        <VisitSheetModal
+          sheet={visitSheet}
+          staff={staff}
+          busy={String(busyId) === String(visitSheet.rowId)}
+          onClose={closeVisitSheet}
+          onStaffChange={(id) => setVisitSheet((s) => ({ ...s, staffValue: id }))}
+          onConfirm={async () => {
+            if (visitSheet.mode === "waiting") {
+              const sid = safeStr(visitSheet.staffValue);
+              if (!sid) {
+                showToast("Bitte Mitarbeiter wählen.");
+                return;
+              }
+              const row = (liveRows || []).find((x) => String(x.id) === String(visitSheet.rowId));
+              if (row) await take(row, sid);
+              closeVisitSheet();
+              return;
+            }
+
+            if (visitSheet.mode === "active") {
+              const row = (liveRows || []).find((x) => String(x.id) === String(visitSheet.rowId));
+              if (row) await finish(row);
+              closeVisitSheet();
+              return;
+            }
+
+            if (visitSheet.mode === "checkout") {
+              closeVisitSheet();
+              nav(`/reception/checkout?visitId=${encodeURIComponent(visitSheet.visitId)}`);
+            }
+          }}
+          onUndo={async () => {
+            const row = (liveRows || []).find((x) => String(x.id) === String(visitSheet.rowId));
+            if (row) await undoToWaiting(row);
+            closeVisitSheet();
+          }}
+          onGoCashier={() => {
+            closeVisitSheet();
+            nav(`/reception/checkout?visitId=${encodeURIComponent(visitSheet.visitId)}`);
+          }}
+        />
+      ) : null}
+    </div>
+    
+  );
+}
+function VisitSheetModal({ sheet, staff, busy, onClose, onConfirm, onUndo, onStaffChange, onGoCashier }) {
+  const [tab, setTab] = useState("overview"); // overview | today | history | times
+
+  useEffect(() => {
+    if (sheet?.open) setTab("overview");
+  }, [sheet?.open]);
+
+  const nowTick = useNowTick(!!sheet?.open);
+
+  const waitingMs = sheet?.waitingSince ? Math.max(0, nowTick - new Date(sheet.waitingSince).getTime()) : 0;
+  const activeMs = sheet?.activeSince ? Math.max(0, nowTick - new Date(sheet.activeSince).getTime()) : 0;
+
+  const mode = String(sheet?.mode || "");
+  const title = safeStr(sheet?.title) || "—";
+
+  const confirmLabel =
+    mode === "waiting" ? "Übernehmen" : mode === "active" ? "Fertig" : mode === "checkout" ? "Zur Kasse" : "OK";
+
+  return (
+    <div className={styles.vBackdrop} role="dialog" aria-modal="true" onMouseDown={onClose}>
+      <div className={styles.vSheet} onMouseDown={(e) => e.stopPropagation()}>
+        <div className={styles.vHead}>
+          <div className={styles.vHeadLeft}>
+            <div className={`${styles.vStatus} ${mode === "waiting" ? styles.vWaiting : mode === "active" ? styles.vActive : styles.vCheckout}`}>
+              {mode === "waiting" ? "Warteliste" : mode === "active" ? "In Behandlung" : "Checkout"}
+            </div>
+
+            <div className={styles.vTitleRow}>
+              <div className={styles.vTitle}>{title}</div>
+              {sheet?.sub ? <div className={styles.vChip}>{sheet.sub}</div> : null}
+            </div>
+
+            <div className={styles.vMetaRow}>
+              <span className={styles.vPill}>Check-in {fmtClock(sheet?.checkInAt)}</span>
+              {mode === "waiting" ? <span className={styles.vPill}>Warten {fmtDuration(waitingMs)}</span> : null}
+              {mode === "active" ? <span className={styles.vPill}>Aktiv {fmtDuration(activeMs)}</span> : null}
+              {sheet?.areaName ? <span className={styles.vPill}>{sheet.areaName}</span> : null}
+            </div>
+          </div>
+
+          <button className={styles.vX} type="button" onClick={onClose} aria-label="Schließen">
+            ✕
+          </button>
+        </div>
+
+        <div className={styles.vTabs}>
+          <button type="button" className={`${styles.vTab} ${tab === "overview" ? styles.vTabOn : ""}`} onClick={() => setTab("overview")}>
+            Übersicht
+          </button>
+          <button type="button" className={`${styles.vTab} ${tab === "today" ? styles.vTabOn : ""}`} onClick={() => setTab("today")}>
+            Heute
+          </button>
+          <button type="button" className={`${styles.vTab} ${tab === "times" ? styles.vTabOn : ""}`} onClick={() => setTab("times")}>
+            Status & Zeiten
+          </button>
+          <button type="button" className={`${styles.vTab} ${tab === "history" ? styles.vTabOn : ""}`} onClick={() => setTab("history")}>
+            History
+          </button>
+          <div className={styles.vRail} />
+        </div>
+
+        <div className={styles.vBody}>
+          {tab === "overview" ? (
+            <div className={styles.vGrid}>
+              <div className={styles.vCard}>
+                <div className={styles.vLabel}>Wunsch / Behandlung</div>
+                <div className={styles.vValue}>{safeStr(sheet?.wishServiceTitle) || "—"}</div>
+              </div>
+
+              <div className={styles.vCard}>
+                <div className={styles.vLabel}>Wunsch-Mitarbeiter</div>
+                <div className={styles.vValue}>{safeStr(sheet?.preferredStaffName) || "—"}</div>
+              </div>
+
+              <div className={styles.vCard}>
+                <div className={styles.vLabel}>Zugewiesen</div>
+                <div className={styles.vValue}>{safeStr(sheet?.assignedStaffName) || "—"}</div>
+              </div>
+
+              <div className={`${styles.vCard} ${styles.vWide}`}>
+                <div className={styles.vLabel}>Notiz</div>
+                <div className={styles.vValue}>{safeStr(sheet?.note) || "—"}</div>
+              </div>
+
+              {Array.isArray(sheet?.members) && sheet.members.length ? (
+                <div className={`${styles.vCard} ${styles.vWide}`}>
+                  <div className={styles.vLabel}>Mitglieder</div>
+                  <div className={styles.vValue}>{sheet.members.slice(0, 12).join(" · ")}</div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {tab === "today" ? (
+            <div className={styles.vSplit}>
+              <div className={styles.vSection}>
+                <div className={styles.vSectionTitle}>Behandlungen</div>
+                {sheet?.services?.length ? (
+                  <div className={styles.vLines}>
+                    {sheet.services.slice(0, 30).map((s, idx) => (
+                      <div key={`${s.title}-${idx}`} className={styles.vLine}>
+                        <div className={styles.vLineLeft}>
+                          <div className={styles.vLineMain}>{s.title || "—"}</div>
+                          {s.note ? <div className={styles.vLineSub}>Notiz: {s.note}</div> : null}
+                        </div>
+                        <div className={styles.vLineRight}>{formatEUR(s.price)}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className={styles.vEmpty}>— keine Services —</div>
+                )}
+              </div>
+
+              <div className={styles.vSection}>
+                <div className={styles.vSectionTitle}>Produkte</div>
+                {sheet?.products?.length ? (
+                  <div className={styles.vLines}>
+                    {sheet.products.slice(0, 30).map((p, idx) => (
+                      <div key={`${p.title}-${idx}`} className={styles.vLine}>
+                        <div className={styles.vLineLeft}>
+                          <div className={styles.vLineMain}>
+                            {p.title || "—"}{p.qty > 1 ? ` ×${p.qty}` : ""}
+                          </div>
+                        </div>
+                        <div className={styles.vLineRight}>{formatEUR(Number(p.price || 0) * Number(p.qty || 1))}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className={styles.vEmpty}>— keine Produkte —</div>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {tab === "times" ? (
+            <div className={styles.vTimes}>
+              <div className={styles.vBigTimers}>
+                <div className={styles.vTimerCard}>
+                  <div className={styles.vLabel}>Wartezeit</div>
+                  <div className={styles.vTimer}>{fmtDuration(waitingMs)}</div>
+                  <div className={styles.vHint}>{sheet?.checkInAt ? `seit ${fmtClock(sheet.checkInAt)}` : "—"}</div>
+                </div>
+                <div className={styles.vTimerCard}>
+                  <div className={styles.vLabel}>In Behandlung</div>
+                  <div className={styles.vTimer}>{sheet?.activeSince ? fmtDuration(activeMs) : "—"}</div>
+                  <div className={styles.vHint}>{sheet?.activeSince ? `seit ${fmtClock(sheet.activeSince)}` : "—"}</div>
+                </div>
+              </div>
+
+              <div className={styles.vSection}>
+                <div className={styles.vSectionTitle}>Bereiche heute</div>
+                {sheet?.liveboard?.length ? (
+                  <div className={styles.vLines}>
+                    {sheet.liveboard.slice(0, 24).map((x) => (
+                      <div key={x.id} className={styles.vLine}>
+                        <div className={styles.vLineLeft}>
+                          <div className={styles.vLineMain}>{x.areaName || "—"}</div>
+                          <div className={styles.vLineSub}>
+                            {statusLabel(x.status)}{x.staff ? ` · MA: ${x.staff}` : ""}
+                          </div>
+                        </div>
+                        <div className={styles.vLineRight}>
+                          {x.status === "waiting" ? fmtDuration(x.waitingMs) : x.status === "active" ? fmtDuration(x.activeMs) : "—"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className={styles.vEmpty}>— keine Liveboard-Daten —</div>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {tab === "history" ? (
+            <div className={styles.vSection}>
+              <div className={styles.vSectionTitle}>Alte Besuche</div>
+              {sheet?.history?.length ? (
+                <div className={styles.vLines}>
+                  {sheet.history.map((h) => (
+                    <div key={h.visitId} className={styles.vLine}>
+                      <div className={styles.vLineLeft}>
+                        <div className={styles.vLineMain}>{h.dateKey || "—"}</div>
+                        <div className={styles.vLineSub}>
+                          {fmtClock(h.createdAt)} · {h.type || "—"} · {h.status || "—"}
+                          {h.note ? ` · ${h.note}` : ""}
+                        </div>
+                      </div>
+                      <div className={styles.vLineRight}> </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className={styles.vEmpty}>— keine History —</div>
+              )}
+            </div>
+          ) : null}
+        </div>
+
+        <div className={styles.vFoot}>
+          {/* Staff picker nur wenn warteliste */}
+          {mode === "waiting" ? (
+            <div className={styles.vStaff}>
+              <div className={styles.vLabel}>Mitarbeiter zuweisen</div>
+              <select className={styles.vSelect} value={sheet?.staffValue || ""} onChange={(e) => onStaffChange?.(e.target.value)} disabled={busy}>
+                <option value="">— bitte wählen —</option>
+                {(staff || []).map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className={styles.vStaffHint}>
+              {mode === "active" ? "Fertig setzt Bereich auf Checkout." : mode === "checkout" ? "Zur Kasse senden." : ""}
+            </div>
+          )}
+
+          <div className={styles.vActions}>
+            {mode === "active" ? (
+              <button type="button" className={styles.vGhost} onClick={onUndo} disabled={busy} title="Zurück auf Warteliste">
+                Zurück
+              </button>
+            ) : null}
+
+            {mode === "checkout" ? (
+              <button type="button" className={styles.vGhost} onClick={onGoCashier} disabled={busy}>
+                Direkt zur Kasse
+              </button>
+            ) : null}
+
+            <button type="button" className={styles.vGhost} onClick={onClose} disabled={busy}>
+              Schließen
+            </button>
+
+            <button type="button" className={styles.vPrimary} onClick={onConfirm} disabled={busy}>
+              {busy ? "…" : confirmLabel}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
+
+

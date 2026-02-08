@@ -5,11 +5,9 @@ import { toDateKeyISO } from "../../../services/time/dateKeys.js";
 function uid(prefix = "id") {
   return `${prefix}_${crypto.randomUUID()}`;
 }
-
 function safeStr(x) {
   return String(x == null ? "" : x).trim();
 }
-
 function safeJsonParse(x, fallback) {
   try {
     const v = JSON.parse(String(x || ""));
@@ -18,13 +16,11 @@ function safeJsonParse(x, fallback) {
     return fallback;
   }
 }
-
 function uniq(arr) {
   return Array.from(new Set((arr || []).filter(Boolean)));
 }
 
 async function ensureVisitAreaState({ visitId, dateKey, areaId, preferredStaffByArea, createdAt }) {
-  // Check if already exists (unique [visitId+areaId])
   const existing = await db.visit_area_state.where("[visitId+areaId]").equals([visitId, areaId]).first();
   if (existing) return;
 
@@ -40,7 +36,7 @@ async function ensureVisitAreaState({ visitId, dateKey, areaId, preferredStaffBy
     preferredStaffName: null,
     assignedStaffId: null,
     assignedStaffName: null,
-    startedAt: createdAt, // waiting started
+    startedAt: createdAt,
     endedAt: null,
     note: "",
   });
@@ -53,9 +49,7 @@ async function upsertVisitRequestedAreas({ visitId, nextAreaIds }) {
   const cur = safeJsonParse(row.requestedAreaIds, []);
   const merged = uniq([...(cur || []), ...(nextAreaIds || [])]);
 
-  await db.visits.update(visitId, {
-    requestedAreaIds: JSON.stringify(merged),
-  });
+  await db.visits.update(visitId, { requestedAreaIds: JSON.stringify(merged) });
 }
 
 async function mergeRequestedStaffByArea({ visitId, preferredStaffByArea }) {
@@ -65,21 +59,16 @@ async function mergeRequestedStaffByArea({ visitId, preferredStaffByArea }) {
   const cur = safeJsonParse(row.requestedStaffByArea, {});
   const merged = { ...(cur || {}) };
 
-  // only set if provided (do not wipe existing)
   for (const k of Object.keys(preferredStaffByArea || {})) {
     const v = preferredStaffByArea?.[k];
     if (v != null && String(v) !== "") merged[k] = v;
   }
 
-  await db.visits.update(visitId, {
-    requestedStaffByArea: JSON.stringify(merged),
-  });
+  await db.visits.update(visitId, { requestedStaffByArea: JSON.stringify(merged) });
 }
 
 async function ensureVisitMember({ visitId, participantKey, customerId, displayName, phone, createdAt }) {
-  // We use role = participantKey to satisfy unique [visitId+role] constraint
   const role = safeStr(participantKey) || "primary";
-
   const existing = await db.visit_members.where("[visitId+role]").equals([visitId, role]).first();
   if (existing) return existing.id;
 
@@ -87,35 +76,26 @@ async function ensureVisitMember({ visitId, participantKey, customerId, displayN
   await db.visit_members.add({
     id,
     visitId,
-    role, // IMPORTANT: unique per participant
+    role,
     customerId: customerId ? String(customerId) : null,
     displayName: safeStr(displayName) || "Mitglied",
     phone: safeStr(phone),
     createdAt,
   });
-
   return id;
 }
 
 /**
  * createVisitFromOrder
- * - Single customer/guest: creates new visit each time (as before)
- * - Group participant booking: reuses ONE group visit per day (customerId = groupId)
- *   and writes services/products to the correct memberId (participantKey)
- *
- * Required for group-aware booking:
- * profile.meta = {
- *   groupId: string,
- *   participantKey: string, // unique key for this participant
- *   groupDisplayName?: string, // name of the group visit
- *   paymentMode?: "single"|"split"
- * }
+ * - Single: creates new visit
+ * - Group participant: reuses ONE group visit per day
  */
 export async function createVisitFromOrder({
   profile,
   comment,
   selectedServices,
   preferredStaffByArea,
+  preferredStaffByProduct, // NEW
   cart,
 }) {
   const now = new Date();
@@ -128,12 +108,23 @@ export async function createVisitFromOrder({
   const meta = profile?.meta || {};
   const isGroupParticipant = !!safeStr(meta.groupId) && !!safeStr(meta.participantKey);
 
-  // display names
   const participantDisplayName = safeStr(profile?.displayName) || "Kunde";
-  const groupDisplayName = safeStr(meta.groupDisplayName) || "Gruppe";
 
-  // payment
+  // ✅ FIX: ReceptionCheckInPage uses meta.groupTitle, old code expected meta.groupDisplayName
+  const groupDisplayName = safeStr(meta.groupDisplayName || meta.groupTitle) || "Gruppe";
+
   const paymentMode = safeStr(meta.paymentMode) || safeStr(profile?.group?.paymentMode) || "single";
+
+  // ===== NEW: staff lookup for product staffName =====
+  const staffRows = await db.staff.toArray().catch(() => []);
+  const staffNameById = (id) => {
+    const sid = String(id || "");
+    if (!sid) return null;
+    const found = (staffRows || []).find((s) => String(s.id) === sid);
+    return found?.name ? String(found.name) : null;
+  };
+
+  const staffByProduct = preferredStaffByProduct && typeof preferredStaffByProduct === "object" ? preferredStaffByProduct : {};
 
   return db.transaction(
     "rw",
@@ -144,11 +135,11 @@ export async function createVisitFromOrder({
     db.visit_area_state,
     db.visit_services,
     db.visit_products,
+    db.staff, // NEW: included (safe)
     async () => {
-      // CUSTOMER ID for history (participant)
       let customerId = profile?.customerId ? String(profile.customerId) : null;
 
-      // Only create a new customer for explicit profile/wedding mode (as you had)
+      // Create customer for profile/wedding mode if needed (keep your behaviour)
       if (!customerId && (profile?.mode === "profile" || profile?.mode === "wedding")) {
         customerId = uid("cust");
         const full = safeStr(profile?.customer?.fullName);
@@ -171,37 +162,47 @@ export async function createVisitFromOrder({
         });
       }
 
-      // ============== GROUP FLOW (one shared visit per group) ==============
+      // ================= GROUP FLOW =================
       if (isGroupParticipant) {
         const groupId = String(meta.groupId);
         const participantKey = String(meta.participantKey);
+        const participantRole = safeStr(meta.participantRole);
 
-        // Find existing open group visit for today (reuse)
+        // Find existing open group visit for today:
+        // ✅ compat: accept legacy (customerId==groupId) OR new (groupId==groupId)
         let visit = await db.visits
-  .where("dateKey")
-  .equals(dateKey)
-  .and((v) =>
-    String(v.status) === "open" &&
-    String(v.type) === "group" &&
-    String(v.customerId || "") === String(groupId)
-  )
-  .first();
+          .where("dateKey")
+          .equals(dateKey)
+          .and((v) => {
+            const st = String(v.status || "");
+            const tp = String(v.type || "").toLowerCase();
+            const gid = String(v.groupId || "");
+            const cid = String(v.customerId || "");
+            return st === "open" && tp === "group" && (gid === groupId || cid === groupId);
+          })
+          .first();
 
         let visitId = visit?.id;
 
-        // If not found, create it
         if (!visitId) {
           visitId = uid("visit");
-
           await db.visits.add({
             id: visitId,
             createdAt,
             dateKey,
             status: "open",
             type: "group",
-            customerId: groupId, // group owner row in customers
+
+            // ✅ keep legacy compatibility:
+            customerId: groupId,
+
+            // ✅ new normalized field:
+            groupId,
+            participantKey: "",
+            participantRole: "",
+
             displayName: groupDisplayName,
-            note: "", // group level note optional (we keep participant notes per service/note)
+            note: "",
             requestedAreaIds: JSON.stringify([]),
             requestedStaffByArea: JSON.stringify({}),
             preferredPaymentMode: paymentMode,
@@ -209,18 +210,21 @@ export async function createVisitFromOrder({
           });
 
           visit = await db.visits.get(visitId);
+        } else {
+          // Ensure groupId filled for older records
+          const needsBackfill = !String(visit?.groupId || "").trim();
+          if (needsBackfill) {
+            await db.visits.update(visitId, { groupId });
+          }
         }
 
-        // Merge requested areas + staff map into visit
         await upsertVisitRequestedAreas({ visitId, nextAreaIds: requestedAreaIds });
         await mergeRequestedStaffByArea({ visitId, preferredStaffByArea });
 
-        // Ensure area waiting state exists for new areas
         for (const areaId of requestedAreaIds) {
           await ensureVisitAreaState({ visitId, dateKey, areaId, preferredStaffByArea, createdAt });
         }
 
-        // Ensure member row (role=participantKey)
         const memberId = await ensureVisitMember({
           visitId,
           participantKey,
@@ -230,7 +234,6 @@ export async function createVisitFromOrder({
           createdAt,
         });
 
-        // Write services for THIS member
         for (const s of selected) {
           await db.visit_services.add({
             id: uid("vs"),
@@ -244,26 +247,30 @@ export async function createVisitFromOrder({
             startedAt: null,
             endedAt: null,
             dateKey,
-            note: safeStr(comment || ""), // participant note at service-level, keeps context
+            note: safeStr(comment || ""),
           });
         }
 
-        // Write products for THIS member
+        // ===== NEW: staff per product stored =====
         for (const p of cart || []) {
+          const pid = String(p.id || p.productId || "");
+          const staffId = String(staffByProduct?.[pid] || "");
+          const staffName = staffId ? staffNameById(staffId) : null;
+
           await db.visit_products.add({
             id: uid("vp"),
             visitId,
             memberId,
-            staffId: null,
-            staffName: null,
+            staffId: staffId || null,
+            staffName: staffName || null,
             title: safeStr(p.title),
             price: Number(p.price || 0),
             qty: Number(p.qty || 1),
             dateKey,
+            productId: pid || null, // optional but useful if your schema supports it
           });
         }
 
-        // Customer history: only when participant has customerId
         if (customerId) {
           await db.customer_history.add({
             id: uid("hist"),
@@ -277,33 +284,26 @@ export async function createVisitFromOrder({
             payload: JSON.stringify({
               groupId,
               participantKey,
-              services: selected.map((x) => ({
-                title: x.title,
-                areaId: x.areaId,
-                price: x.price,
-              })),
+              participantRole,
+              services: selected.map((x) => ({ title: x.title, areaId: x.areaId, price: x.price })),
               products: (cart || []).map((x) => ({
                 title: x.title,
                 price: x.price,
                 qty: x.qty,
+                staffId: String(staffByProduct?.[String(x.id || x.productId || "")] || ""),
               })),
               comment: comment || "",
             }),
           });
 
-          await db.customers.update(customerId, {
-            lastVisitAt: createdAt,
-            updatedAt: createdAt,
-          });
+          await db.customers.update(customerId, { lastVisitAt: createdAt, updatedAt: createdAt });
         }
 
         return { visitId };
       }
 
-      // ============== SINGLE FLOW (your existing behavior) ==============
+      // ================= SINGLE FLOW =================
       const visitId = uid("visit");
-
-      const displayName = participantDisplayName;
 
       await db.visits.add({
         id: visitId,
@@ -312,12 +312,17 @@ export async function createVisitFromOrder({
         status: "open",
         type: "single",
         customerId,
-        displayName,
+        displayName: participantDisplayName,
         note: comment || "",
         requestedAreaIds: JSON.stringify(requestedAreaIds),
         requestedStaffByArea: JSON.stringify(preferredStaffByArea || {}),
         preferredPaymentMode: paymentMode,
         readyForCheckoutAt: null,
+
+        // v6 extra fields (harmless if unused)
+        groupId: "",
+        participantKey: "",
+        participantRole: "",
       });
 
       const memberId = uid("mem");
@@ -326,7 +331,7 @@ export async function createVisitFromOrder({
         visitId,
         role: "primary",
         customerId,
-        displayName,
+        displayName: participantDisplayName,
         phone: safeStr(profile?.customer?.phone || profile?.phone),
         createdAt,
       });
@@ -352,17 +357,23 @@ export async function createVisitFromOrder({
         });
       }
 
+      // ===== NEW: staff per product stored =====
       for (const p of cart || []) {
+        const pid = String(p.id || p.productId || "");
+        const staffId = String(staffByProduct?.[pid] || "");
+        const staffName = staffId ? staffNameById(staffId) : null;
+
         await db.visit_products.add({
           id: uid("vp"),
           visitId,
           memberId,
-          staffId: null,
-          staffName: null,
+          staffId: staffId || null,
+          staffName: staffName || null,
           title: safeStr(p.title),
           price: Number(p.price || 0),
           qty: Number(p.qty || 1),
           dateKey,
+          productId: pid || null, // optional but useful if your schema supports it
         });
       }
 
@@ -378,27 +389,22 @@ export async function createVisitFromOrder({
           type: "CHECKIN",
           payload: JSON.stringify({
             requestedAreaIds,
-            services: selected.map((x) => ({
-              title: x.title,
-              areaId: x.areaId,
-              price: x.price,
-            })),
+            services: selected.map((x) => ({ title: x.title, areaId: x.areaId, price: x.price })),
             products: (cart || []).map((x) => ({
               title: x.title,
               price: x.price,
               qty: x.qty,
+              staffId: String(staffByProduct?.[String(x.id || x.productId || "")] || ""),
             })),
             comment: comment || "",
           }),
         });
 
-        await db.customers.update(customerId, {
-          lastVisitAt: createdAt,
-          updatedAt: createdAt,
-        });
+        await db.customers.update(customerId, { lastVisitAt: createdAt, updatedAt: createdAt });
       }
 
       return { visitId };
     }
   );
 }
+

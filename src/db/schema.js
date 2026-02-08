@@ -1,14 +1,7 @@
 // src/db/schema.js
 export const DB_NAME = "sibel_salon_system";
 
-/**
- * v4:
- * - areas: displayNo (01/02...) für UI (DB-ID bleibt stabil als FK)
- * - product_categories: displayNo
- * - service_catalog: kein Kategorie-Workflow mehr, Name statt Titel
- * - product_catalog: categoryId (FK) statt category string, Name statt Titel
- */
-export const DB_VERSION = 5;
+export const DB_VERSION = 6;
 
 export const schemaV2 = {
   areas: `
@@ -345,5 +338,72 @@ export const schemaV5 = {
     [visitId+createdAt],
     [dateKey+type],
     [visitId+type]
+  `,
+};
+
+export const schemaV6 = {
+  ...schemaV5,
+
+  // --- NEW: groups (separate entity) ---
+  groups: `
+    id,
+    createdAt,
+    updatedAt,
+    title,
+    active,
+
+    contactFirstName,
+    contactLastName,
+    phone,
+    email,
+    instagram,
+
+    marketingConsent,
+    address,
+    note,
+
+    paymentMode,
+    [title],
+    [phone],
+    [email]
+  `,
+
+  // --- NEW: group members normalized ---
+  group_members: `
+    id,
+    groupId,
+    displayName,
+    phone,
+    customerId,
+    sortOrder,
+    createdAt,
+    updatedAt,
+    [groupId+sortOrder],
+    [groupId+displayName],
+    [customerId]
+  `,
+
+  // --- visits: add group linkage for robust display ---
+  visits: `
+    id,
+    createdAt,
+    dateKey,
+    status,
+    type,
+    customerId,
+    displayName,
+    note,
+    requestedAreaIds,
+    requestedStaffByArea,
+    preferredPaymentMode,
+    readyForCheckoutAt,
+
+    groupId,
+    participantKey,
+    participantRole,
+
+    [dateKey+status],
+    [customerId+dateKey],
+    [groupId+dateKey]
   `,
 };

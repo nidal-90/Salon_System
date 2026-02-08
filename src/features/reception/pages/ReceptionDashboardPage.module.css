@@ -1,3 +1,5 @@
+/* src/features/reception/pages/ReceptiondashboardPage.module.css */
+
 .wrap{ display:grid; place-items:start center; }
 .card{
   width:min(1150px,100%);

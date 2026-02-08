@@ -34,6 +34,13 @@ function uid(prefix = "id") {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
+function splitName(full) {
+  const x = String(full || "").trim();
+  if (!x) return { firstName: "", lastName: "" };
+  const [firstName, ...rest] = x.split(" ");
+  return { firstName: firstName || x, lastName: rest.join(" ") || "" };
+}
+
 export default function RegisterPage() {
   const nav = useNavigate();
 
@@ -119,14 +126,11 @@ export default function RegisterPage() {
     const now = new Date().toISOString();
 
     try {
-      // 1) Single customer profile
+      // 1) Single customer profile -> customers
       if (mode === "profile") {
         const customerId = uid("cust");
         const fullName = profile.fullName.trim();
-
-        // split name (simple heuristic)
-        const [firstName, ...rest] = fullName.split(" ");
-        const lastName = rest.join(" ");
+        const { firstName, lastName } = splitName(fullName);
 
         await db.transaction("rw", db.customers, db.customer_history, async () => {
           await db.customers.add({
@@ -162,61 +166,56 @@ export default function RegisterPage() {
           }
         });
 
-        // Ziel: zurück zur Reception oder Start (deine Wahl)
         nav("/reception", { replace: true });
         return;
       }
 
-      // 2) Wedding/Group: contact as customer + group data in history
+      // 2) Wedding/Group -> groups + group_members (NICHT customers!)
       if (mode === "wedding") {
-        const customerId = uid("cust");
+        const groupId = uid("grp");
         const title = wedding.title.trim();
-
         const contactName = wedding.contactName.trim();
-        const [firstName, ...rest] = contactName.split(" ");
-        const lastName = rest.join(" ");
+        const { firstName: contactFirstName, lastName: contactLastName } = splitName(contactName);
 
-        const membersClean = members.map((m) => ({
-          displayName: (m.displayName || "").trim(),
-          phone: (m.phone || "").trim(),
-        }));
-
-        await db.transaction("rw", db.customers, db.customer_history, async () => {
-          await db.customers.add({
-            id: customerId,
+        const membersClean = members
+          .map((m, idx) => ({
+            id: uid("gm"),
+            groupId,
+            displayName: (m.displayName || "").trim(),
+            phone: (m.phone || "").trim(),
+            customerId: "", // optional: wenn du später Mitglied = bestehender Kunde verlinkst
+            sortOrder: idx,
             createdAt: now,
             updatedAt: now,
-            firstName: firstName || contactName,
-            lastName: lastName || "",
+          }))
+          .filter((m) => m.displayName.length >= 2);
+
+        const address = `${(wedding.street || "").trim()} ${(wedding.city || "").trim()}`.trim();
+
+        await db.transaction("rw", db.groups, db.group_members, async () => {
+          await db.groups.add({
+            id: groupId,
+            createdAt: now,
+            updatedAt: now,
+            title,
+            active: 1,
+
+            contactFirstName,
+            contactLastName,
             phone: wedding.phone.trim(),
             email: wedding.email.trim(),
             instagram: "",
+
             marketingConsent: 0,
-            lastVisitAt: null,
-            lastServedByStaffId: null,
-            lastServedByStaffName: null,
-            addressStreet: (wedding.street || "").trim(),
-            addressCity: (wedding.city || "").trim(),
-            // optional: flag for group contact
-            groupTitle: title,
+            address,
+            note: note.trim() || "",
+
+            paymentMode: wedding.paymentMode, // single|split
           });
 
-          await db.customer_history.add({
-            id: uid("hist"),
-            customerId,
-            createdAt: now,
-            visitId: null,
-            areaId: null,
-            staffId: null,
-            staffName: null,
-            type: "GROUP_CREATED",
-            payload: JSON.stringify({
-              title,
-              paymentMode: wedding.paymentMode,
-              members: membersClean,
-              note: note.trim() || "",
-            }),
-          });
+          if (membersClean.length) {
+            await db.group_members.bulkAdd(membersClean);
+          }
         });
 
         nav("/reception", { replace: true });
@@ -456,7 +455,11 @@ export default function RegisterPage() {
               placeholder="z. B. Allergie, Wunsch, Hinweis..."
             />
           </Field>
-          {msg && <div className={styles.error} style={{ marginTop: 10 }}>{msg}</div>}
+          {msg && (
+            <div className={styles.error} style={{ marginTop: 10 }}>
+              {msg}
+            </div>
+          )}
         </section>
 
         <footer className={styles.footer}>

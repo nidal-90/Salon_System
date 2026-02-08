@@ -30,73 +30,75 @@ function asMoney(n) {
 }
 
 export async function seedIfEmpty() {
-  const [areasCount, staffCount, catCount] = await Promise.all([
-    db.areas.count(),
-    db.staff.count(),
-    db.product_categories.count(),
-  ]);
-
-  // Areas
-  if (areasCount === 0) {
-    await db.areas.bulkPut([
-      { id: crypto.randomUUID(), displayNo: 1, name: "Haarschnitt Damen", active: 1, code: "", sortOrder: 0 },
-      { id: crypto.randomUUID(), displayNo: 2, name: "Haarschnitt Herren", active: 1, code: "", sortOrder: 0 },
-      { id: crypto.randomUUID(), displayNo: 3, name: "Farbe", active: 1, code: "", sortOrder: 0 },
-      { id: crypto.randomUUID(), displayNo: 4, name: "Make-up", active: 1, code: "", sortOrder: 0 },
-      { id: crypto.randomUUID(), displayNo: 5, name: "Augenbrauen", active: 1, code: "", sortOrder: 0 },
-      { id: crypto.randomUUID(), displayNo: 6, name: "SPA", active: 1, code: "", sortOrder: 0 },
+  // ✅ Atomar: verhindert doppeltes Seeding durch parallele Calls (StrictMode / Init)
+  return db.transaction("rw", db.areas, db.staff, db.product_categories, async () => {
+    const [areasCount, staffCount, catCount] = await Promise.all([
+      db.areas.count(),
+      db.staff.count(),
+      db.product_categories.count(),
     ]);
-  }
 
-  // Product categories
-  if (catCount === 0) {
-    await db.product_categories.bulkPut([
-      { id: crypto.randomUUID(), displayNo: 1, title: "HairCare", active: 1, sortOrder: 0 },
-      { id: crypto.randomUUID(), displayNo: 2, title: "Beauty", active: 1, sortOrder: 0 },
-    ]);
-  }
+    if (areasCount === 0) {
+      await db.areas.bulkPut([
+        { id: crypto.randomUUID(), displayNo: 1, name: "Haarschnitt Damen", active: 1, code: "", sortOrder: 0 },
+        { id: crypto.randomUUID(), displayNo: 2, name: "Haarschnitt Herren", active: 1, code: "", sortOrder: 0 },
+        { id: crypto.randomUUID(), displayNo: 3, name: "Farbe", active: 1, code: "", sortOrder: 0 },
+        { id: crypto.randomUUID(), displayNo: 4, name: "Make-up", active: 1, code: "", sortOrder: 0 },
+        { id: crypto.randomUUID(), displayNo: 5, name: "Augenbrauen", active: 1, code: "", sortOrder: 0 },
+        { id: crypto.randomUUID(), displayNo: 6, name: "SPA", active: 1, code: "", sortOrder: 0 },
+      ]);
+    }
 
-  // Staff
-  if (staffCount === 0) {
-    const rows = TEST_STAFF.map((s, idx) => ({
-      id: crypto.randomUUID(),
-      name: s.name,
-      active: 1,
-      role: "staff",
-      usbKeyId: "",
-      areaIds: [],
-      sortOrder: idx + 1,
-      commissionPct: Number(s.commissionPct ?? 100),
-      baseSalary: asMoney(s.baseSalary ?? 0),
-      yearlyVacationDays: 20,
-    }));
+    if (catCount === 0) {
+      await db.product_categories.bulkPut([
+        { id: crypto.randomUUID(), displayNo: 1, title: "HairCare", active: 1, sortOrder: 0 },
+        { id: crypto.randomUUID(), displayNo: 2, title: "Beauty", active: 1, sortOrder: 0 },
+      ]);
+    }
 
-    rows.unshift({
-      id: crypto.randomUUID(),
-      name: "Admin",
-      active: 1,
-      role: "admin",
-      usbKeyId: "admin_key_1",
-      areaIds: [],
-      sortOrder: 0,
-      commissionPct: 0,
-      baseSalary: 0,
-      yearlyVacationDays: 0,
-    });
+    if (staffCount === 0) {
+      const rows = (TEST_STAFF || []).map((s, idx) => ({
+        id: crypto.randomUUID(),
+        name: s.name,
+        active: 1,
+        role: "staff",
+        usbKeyId: "",
+        areaIds: [],
+        sortOrder: idx + 1,
+        commissionPct: Number(s.commissionPct ?? 100),
+        baseSalary: asMoney(s.baseSalary ?? 0),
+        yearlyVacationDays: 20,
+      }));
 
-    rows.unshift({
-      id: crypto.randomUUID(),
-      name: "Kasse",
-      active: 1,
-      role: "cashier",
-      usbKeyId: "cash_key_1",
-      areaIds: [],
-      sortOrder: -1,
-      commissionPct: 0,
-      baseSalary: 0,
-      yearlyVacationDays: 0,
-    });
+      // cashier
+      rows.unshift({
+        id: crypto.randomUUID(),
+        name: "Kasse",
+        active: 1,
+        role: "cashier",
+        usbKeyId: "cash_key_1",
+        areaIds: [],
+        sortOrder: -1,
+        commissionPct: 0,
+        baseSalary: 0,
+        yearlyVacationDays: 0,
+      });
 
-    await db.staff.bulkPut(rows);
-  }
+      // admin
+      rows.unshift({
+        id: crypto.randomUUID(),
+        name: "Admin",
+        active: 1,
+        role: "admin",
+        usbKeyId: "admin_key_1",
+        areaIds: [],
+        sortOrder: 0,
+        commissionPct: 0,
+        baseSalary: 0,
+        yearlyVacationDays: 0,
+      });
+
+      await db.staff.bulkPut(rows);
+    }
+  });
 }

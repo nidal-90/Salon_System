@@ -1,3 +1,6 @@
+/* src/features/reception/pages/ReceptionCheckInPage.module.css */
+
+/* ===== Theme tokens (unchanged) ===== */
 :root{
   --bg: #f6f7fb;
   --panel: rgba(255,255,255,.82);
@@ -40,7 +43,7 @@
 }
 
 .shell{
-  width: min(1240px, 100%);
+  width: min(1020px, 100%);
   margin: 0 auto;
   display: grid;
   gap: 14px;
@@ -74,6 +77,7 @@
   line-height: 1.35;
 }
 
+/* used by overlay close button */
 .back{
   display:inline-flex;
   align-items:center;
@@ -88,6 +92,7 @@
   cursor:pointer;
 }
 .back:hover{ background: rgba(0,0,0,.92); }
+.back:active{ transform: translateY(1px); }
 
 /* ===== Toast ===== */
 .toast{
@@ -120,7 +125,7 @@
   border: 1px solid var(--stroke);
   border-radius: 18px;
   background: rgba(255,255,255,.78);
-  padding: 14px;
+  padding: 14px 14px 13px;
   box-shadow: var(--shadow2);
   backdrop-filter: blur(14px);
 }
@@ -128,9 +133,12 @@
 .kpiBtn{
   cursor:pointer;
   text-align:left;
-  transition: transform 140ms ease;
+  transition: transform 140ms ease, background 140ms ease;
 }
-.kpiBtn:hover{ transform: translateY(-1px); }
+.kpiBtn:hover{
+  transform: translateY(-1px);
+  background: rgba(255,255,255,.86);
+}
 
 .kpiLabel{ color: var(--muted); font-weight: 900; }
 .kpiVal{ margin-top: 6px; font-size: 26px; font-weight: 950; color: var(--text); }
@@ -182,20 +190,16 @@
   color: rgba(11,18,32,.86);
   font-weight: 900;
   cursor:pointer;
+  transition: background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
 .pill:hover{ background: rgba(255,255,255,.96); }
+.pill:active{ transform: translateY(1px); }
+.pill:disabled{ opacity: .55; cursor:not-allowed; }
+
 .pillOn{
   background: rgba(17,17,17,.06);
   border-color: rgba(17,17,17,.18);
   box-shadow: 0 0 0 4px var(--focus);
-}
-
-/* ===== Step wrapper ===== */
-.step{
-  padding: 12px;
-  border-radius: var(--radius-lg);
-  background: rgba(255,255,255,.60);
-  border: 1px solid var(--stroke);
 }
 
 /* ===== Search ===== */
@@ -209,6 +213,11 @@
   border: 1px solid var(--stroke2);
   background: rgba(255,255,255,.96);
   outline: none;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+}
+.search::placeholder{
+  color: rgba(11,18,32,.42);
   font-weight: 800;
 }
 .search:focus{
@@ -220,9 +229,11 @@
 .list{
   display:grid;
   gap: 10px;
-  max-height: 360px;
+  max-height: 420px;
   overflow:auto;
   padding-right: 4px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .listSmall{
@@ -231,21 +242,26 @@
   padding-right: 4px;
   display:grid;
   gap: 10px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
+/* Rows */
 .row{
   display:flex;
   justify-content:space-between;
   align-items:center;
   gap: 12px;
-  padding: 12px;
+  padding: 12px 12px;
   border-radius: 16px;
   border: 1px solid var(--stroke);
   background: rgba(255,255,255,.74);
   cursor: pointer;
   text-align:left;
+  transition: background 140ms ease, transform 140ms ease, border-color 140ms ease;
 }
 .row:hover{ background: rgba(0,0,0,.03); }
+.row:active{ transform: translateY(1px); }
 
 .rowOn{
   border-color: rgba(59,130,246,.35);
@@ -257,17 +273,38 @@
   background: var(--warnBg);
 }
 
-/* NEW: done rows in group participant list */
 .rowDone{
   border-color: rgba(34,197,94,.25);
   background: rgba(34,197,94,.06);
 }
+.rowActive{
+  border-color: var(--warnStroke);
+  background: var(--warnBg);
+}
 
-.rowTitle{ font-weight: 950; color: var(--text); }
-.rowMeta{ margin-top: 3px; font-size: 12px; color: var(--muted); font-weight: 800; }
 
-.rowRight{ display:flex; align-items:center; gap: 8px; }
+.rowTitle{
+  font-weight: 950;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.rowMeta{
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.25;
+}
 
+.rowRight{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Badges */
 .badge{
   height: 30px;
   padding: 0 12px;
@@ -278,7 +315,6 @@
   color: rgba(0,0,0,.78);
   white-space: nowrap;
 }
-
 .badgeChecked{
   height: 30px;
   padding: 0 12px;
@@ -290,7 +326,7 @@
   white-space: nowrap;
 }
 
-/* NEW: small chip tag for Kontakt/Mitglied */
+/* Chip */
 .chip{
   margin-left: 10px;
   display:inline-flex;
@@ -324,45 +360,14 @@
   box-shadow: 0 14px 28px rgba(0,0,0,.14);
 }
 .primary:hover{ background: var(--black2); }
+.primary:active{ transform: translateY(1px); }
 .primary:disabled{
   opacity: .55;
   cursor:not-allowed;
   box-shadow:none;
 }
 
-/* ===== Group split layout (left list, right details) ===== */
-.groupSplit{
-  display:grid;
-  grid-template-columns: 0.9fr 1.1fr;
-  gap: 12px;
-}
-@media (max-width: 1100px){
-  .groupSplit{ grid-template-columns: 1fr; }
-}
-
-.groupListBox{
-  border: 1px solid var(--stroke);
-  border-radius: var(--radius-lg);
-  background: rgba(255,255,255,.62);
-  padding: 12px;
-  display:grid;
-  gap:10px;
-}
-
-.groupListHead{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 10px;
-}
-
-.groupFormBox{
-  border: 1px solid var(--stroke);
-  border-radius: var(--radius-lg);
-  background: rgba(255,255,255,.62);
-  padding: 12px;
-}
-
+/* ===== Buttons ===== */
 .ghost{
   height:40px;
   padding:0 12px;
@@ -372,10 +377,16 @@
   color: rgba(11,18,32,.86);
   font-weight: 900;
   cursor:pointer;
+  transition: background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
 .ghost:hover{ background: rgba(255,255,255,.96); }
+.ghost:active{ transform: translateY(1px); }
+.ghost:focus{
+  outline: none;
+  box-shadow: 0 0 0 4px var(--focus);
+}
 
-/* NEW: group header (right box) */
+/* ===== Group header / participants ===== */
 .groupHeader{
   display:flex;
   justify-content:space-between;
@@ -385,133 +396,28 @@
   border-bottom: 1px solid rgba(0,0,0,.06);
   margin-bottom: 10px;
 }
-
 .groupHeaderTitle{
   font-weight: 950;
   letter-spacing: -0.01em;
   color: var(--text);
 }
-
 .groupHeaderSub{
   margin-top: 4px;
   font-size: 12px;
   color: var(--muted);
   font-weight: 800;
 }
-
 .participantList{
   display:grid;
   gap: 10px;
-  max-height: 300px;
+  max-height: 420px;
   overflow:auto;
   padding-right: 4px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* ===== Group form (kept for compatibility; still used elsewhere in file) ===== */
-.groupGrid{
-  display:grid;
-  grid-template-columns: 1.3fr auto;
-  gap: 10px;
-  align-items:end;
-}
-@media (max-width: 900px){
-  .groupGrid{ grid-template-columns: 1fr; }
-}
-
-.field{ display:flex; flex-direction:column; gap:6px; }
-.field span{
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: rgba(11,18,32,.72);
-}
-
-.input{
-  height: 44px;
-  padding: 0 12px;
-  border-radius: 14px;
-  border: 1px solid var(--stroke2);
-  background: rgba(255,255,255,.96);
-  outline:none;
-  font-weight: 800;
-}
-
-.input:focus{
-  border-color: rgba(17,17,17,.22);
-  box-shadow: 0 0 0 4px var(--focus);
-}
-
-.payRow{
-  display:flex;
-  gap: 8px;
-  justify-content:flex-end;
-  flex-wrap: wrap;
-}
-
-.members{
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--stroke);
-}
-
-.membersHead{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom: 10px;
-}
-
-.bold{ font-weight: 950; }
-
-.add{
-  height: 40px;
-  padding: 0 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(0,0,0,.14);
-  background: rgba(0,0,0,.90);
-  color: #fff;
-  font-weight: 900;
-  cursor:pointer;
-}
-.add:hover{ background: rgba(0,0,0,.95); }
-
-.memberRow{
-  display:grid;
-  grid-template-columns: 1.1fr 1fr 0.9fr auto;
-  gap: 10px;
-  align-items:center;
-  margin-bottom: 10px;
-}
-@media (max-width: 1050px){
-  .memberRow{ grid-template-columns: 1fr; }
-}
-
-.select{
-  height: 44px;
-  padding: 0 12px;
-  border-radius: 14px;
-  border: 1px solid var(--stroke2);
-  background: rgba(255,255,255,.96);
-  outline:none;
-  font-weight: 800;
-}
-.select:focus{
-  border-color: rgba(17,17,17,.22);
-  box-shadow: 0 0 0 4px var(--focus);
-}
-
-.remove{
-  height: 40px;
-  padding: 0 12px;
-  border-radius: 14px;
-  border: 1px solid var(--dangerStroke);
-  background: var(--dangerBg);
-  color: #b42318;
-  font-weight: 950;
-  cursor:pointer;
-}
-
+/* ===== Notes / empty ===== */
 .note{
   padding: 12px;
   border-radius: 16px;
@@ -519,9 +425,8 @@
   background: rgba(255,255,255,.60);
   color: rgba(11,18,32,.70);
   font-weight: 800;
+  line-height: 1.35;
 }
-
-/* ===== Empty placeholder used in groups + overlay ===== */
 .emptyInline{
   padding: 14px;
   border-radius: 16px;
@@ -533,15 +438,17 @@
 
 /* ===== Embed wrapper ===== */
 .embed{
-  margin-top: 14px;
+  margin-top: 10px;
   border-radius: var(--radius-xl);
   overflow:hidden;
-  border: 1px solid var(--stroke);
-  background: var(--panel);
-  box-shadow: var(--shadow2);
+  border: 1px solid rgba(15,23,42,.08);
+  background: rgba(255,255,255,.70);
+  box-shadow: 0 8px 22px rgba(2,8,23,.06);
+  min-width: 0;
 }
+.embed :global(*){ min-width: 0; }
 
-/* ===== Overlay / “Check-ins heute” ===== */
+/* ===== Overlay ===== */
 .overlay{
   position: fixed;
   inset: 0;
@@ -576,7 +483,6 @@
   font-weight: 950;
   letter-spacing: -0.01em;
 }
-
 .overlaySub{
   margin-top: 4px;
   font-size: 12px;
@@ -647,27 +553,7 @@
 .detailQty{ margin-left: 8px; color: var(--muted); font-weight: 900; }
 .detailPrice{ font-weight: 950; color: rgba(11,18,32,.90); }
 
-.detailTotal{
-  margin-top: 12px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  padding: 12px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(0,0,0,.10);
-  background: rgba(17,17,17,.06);
-  font-weight: 950;
-}
-
-.detailHint{
-  margin-top: 10px;
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 800;
-  line-height: 1.4;
-}
-
-/* ===== Browser-like tabs (Firefox style) ===== */
+/* ===== Browser-like tabs ===== */
 .browserTabs{
   display:flex;
   gap: 6px;
@@ -688,11 +574,10 @@
   font-weight: 950;
   color: rgba(11,18,32,.78);
   cursor:pointer;
+  transition: background 140ms ease, transform 140ms ease;
 }
-
-.browserTab:hover{
-  background: rgba(255,255,255,.80);
-}
+.browserTab:hover{ background: rgba(255,255,255,.80); }
+.browserTab:active{ transform: translateY(1px); }
 
 .browserTabOn{
   background: rgba(255,255,255,.92);
@@ -706,3 +591,593 @@
   background: rgba(255,255,255,.74);
   padding: 12px;
 }
+
+/* =========================================================
+   NEW: Tree list + inline group members (no buttons)
+   ========================================================= */
+.treeList{
+  display:grid;
+  gap: 10px;
+  max-height: 520px;
+  overflow:auto;
+  padding-right: 4px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.treeNode{
+  display:grid;
+  gap: 8px;
+}
+
+.memberInline{
+  display:grid;
+  gap: 8px;
+  padding-left: 16px;
+  border-left: 2px solid rgba(0,0,0,.06);
+  margin-left: 6px;
+}
+
+.memberRow{
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.70);
+}
+
+/* =========================================================
+   NEW: Notes box
+   ========================================================= */
+.notesBox{
+  margin-top: 10px;
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px dashed rgba(11,18,32,.18);
+  background: rgba(255,255,255,.60);
+  color: rgba(11,18,32,.78);
+  font-weight: 750;
+}
+
+/* =========================================================
+   NEW: Status table
+   ========================================================= */
+.statusTable{
+  margin-top: 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,.08);
+  background: rgba(255,255,255,.72);
+  overflow:hidden;
+}
+
+.statusHead{
+  display:grid;
+  grid-template-columns: 1.3fr .7fr .8fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  color: rgba(11,18,32,.62);
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.statusBody{
+  display:grid;
+}
+
+.statusRow{
+  display:grid;
+  grid-template-columns: 1.3fr .7fr .8fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+.statusRow:last-child{ border-bottom: none; }
+
+.statusSvc{
+  min-width: 0;
+}
+.statusSvcTitle{
+  font-weight: 950;
+  color: rgba(11,18,32,.92);
+  letter-spacing: -0.01em;
+}
+.statusSvcMeta{
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 850;
+}
+
+.statusPhase{
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  font-weight: 950;
+  color: rgba(11,18,32,.90);
+}
+
+.statusTime{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  justify-content:center;
+  gap: 2px;
+}
+.statusSince{
+  font-weight: 950;
+  color: rgba(11,18,32,.92);
+}
+.statusCounter{
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+/* =========================================================
+   Liveboard-DNA Addons (SAFE: only additive)
+   ========================================================= */
+
+/* Service line split (title + meta line under it) */
+.lineTitle{
+  font-weight: 950;
+  color: rgba(11,18,32,.92);
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+.lineMeta{
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+/* Group overview blocks (Behandlung/Notizen/Status grouped by member) */
+.groupBlocks{
+  margin-top: 10px;
+  display:grid;
+  gap: 10px;
+}
+.groupBlock{
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 16px;
+  background: rgba(255,255,255,.70);
+  padding: 10px;
+}
+.groupBlockHead{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap: 10px;
+  padding: 4px 4px 10px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  margin-bottom: 10px;
+}
+.groupBlockTitle{
+  font-weight: 950;
+  color: rgba(11,18,32,.92);
+  letter-spacing: -0.01em;
+}
+.groupBlockMeta{
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 850;
+}
+
+/* Status as cards (replaces table look but keeps content) */
+.statusStack{
+  margin-top: 10px;
+  display:grid;
+  gap: 10px;
+}
+
+.statusCardRow{
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 16px;
+  background: rgba(255,255,255,.74);
+  padding: 12px 12px;
+  display:grid;
+  grid-template-columns: 1.4fr .8fr .7fr;
+  gap: 10px;
+  align-items:center;
+  position: relative;
+  overflow:hidden;
+}
+
+/* subtle ambient left bar */
+.statusCardRow::before{
+  content:"";
+  position:absolute;
+  inset: 0;
+  pointer-events:none;
+  opacity: .9;
+}
+
+/* tones like Liveboard */
+.toneWaiting::before{
+  background:
+    radial-gradient(700px 200px at 0% 0%, rgba(245,158,11,.14), transparent 60%),
+    linear-gradient(90deg, rgba(245,158,11,.10), transparent 55%);
+}
+.toneActive::before{
+  background:
+    radial-gradient(700px 200px at 0% 0%, rgba(34,197,94,.12), transparent 60%),
+    linear-gradient(90deg, rgba(34,197,94,.08), transparent 55%);
+}
+.toneCheckout::before{
+  background:
+    radial-gradient(700px 200px at 0% 0%, rgba(59,130,246,.12), transparent 60%),
+    linear-gradient(90deg, rgba(59,130,246,.08), transparent 55%);
+}
+.tonePaid::before{
+  background:
+    radial-gradient(700px 200px at 0% 0%, rgba(34,197,94,.10), transparent 60%),
+    linear-gradient(90deg, rgba(34,197,94,.06), transparent 55%);
+}
+
+.statusLeft{ min-width:0; position:relative; }
+.statusMid{ position:relative; display:flex; flex-direction:column; gap: 6px; }
+.statusRight{ position:relative; display:flex; flex-direction:column; align-items:flex-end; gap: 4px; }
+
+.statusPill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.80);
+  font-weight: 950;
+  color: rgba(11,18,32,.90);
+  font-size: 12px;
+  width: fit-content;
+}
+.statusSince{
+  font-weight: 950;
+  color: rgba(11,18,32,.90);
+  font-variant-numeric: tabular-nums;
+}
+.statusHint{
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+/* responsive */
+@media (max-width: 760px){
+  .statusCardRow{
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .statusRight{ align-items:flex-start; }
+}
+.headerActions{
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  gap:10px;
+}
+
+.primaryBtn{
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(17,17,17,.22);
+  background: rgba(17,17,17,.92);
+  color:#fff;
+  font-weight: 950;
+  cursor:pointer;
+  box-shadow: 0 10px 24px rgba(0,0,0,.14);
+}
+.primaryBtn:hover{ background: rgba(17,17,17,.98); }
+.primaryBtn:active{ transform: translateY(1px); }
+
+
+/* --- Overlay: nie größer als Viewport, Header bleibt sichtbar --- */
+.overlayCard{
+  width: min(1100px, 100%);
+  max-height: 88vh;              /* NEU */
+  display: flex;                 /* NEU */
+  flex-direction: column;        /* NEU */
+  overflow: hidden;
+}
+/* Header bleibt oben fix im Card-Flow */
+.overlayHead{
+  flex: 0 0 auto;                /* NEU */
+}
+
+/* Body nimmt Resthöhe und scrollt NICHT als Ganzes, sondern in Spalten */
+.overlayBody{
+  flex: 1 1 auto;                /* NEU */
+  min-height: 0;                 /* NEU: erlaubt inneres Scrollen */
+  overflow: hidden;              /* NEU */
+}
+
+/* Spalten: volle Höhe */
+.overlayLeft,
+.overlayRight{
+  height: 100%;                  /* NEU */
+  min-height: 0;                 /* NEU */
+  overflow: hidden;              /* NEU */
+  display: flex;                 /* NEU */
+  flex-direction: column;        /* NEU */
+}
+
+/* Linke Liste scrollt sauber */
+.treeList{
+  flex: 1 1 auto;                /* NEU */
+  min-height: 0;                 /* NEU */
+  overflow: auto;
+}
+
+/* Rechte Detail-Card: Tabs oben, Content scrollt */
+.detailCard{
+  height: 100%;                  /* NEU */
+  display: flex;                 /* NEU */
+  flex-direction: column;        /* NEU */
+  min-height: 0;                 /* NEU */
+}
+
+.browserTabs{
+  flex: 0 0 auto;                /* NEU */
+}
+
+.browserPanel{
+  flex: 1 1 auto;                /* NEU */
+  min-height: 0;                 /* NEU */
+  overflow: auto;                /* NEU: HIER scrollt der Inhalt */
+}
+/* --- Behandlungsliste: max ~5 Zeilen sichtbar dann scroll --- */
+.orderList{
+  max-height: 320px;      /* ca. 5 Rows bei deinem Row-Design */
+  overflow: auto;
+  padding-right: 4px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+/* FIX: Grid darf Zeilen NICHT auf volle Höhe stretchen */
+.treeList{
+  align-content: start;        /* <- wichtig */
+  grid-auto-rows: max-content; /* <- wichtig */
+  align-items: start;
+}
+
+/* Optional: damit auch Member-Listen nie stretchen */
+.memberInline{
+  align-content: start;
+  grid-auto-rows: max-content;
+}
+/* ===== Shared: show ~5 items then scroll ===== */
+.scroll5{
+  /* ungefähr 5 Rows – anpassbar */
+  max-height: 340px;              /* ~5 Karten bei deinem Spacing */
+  overflow: auto;
+  padding-right: 4px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+/* =========================================================
+   COMPACT MODE – Match Cashier / Reception Profile
+   SAFE OVERRIDES ONLY (no layout / logic changes)
+   ========================================================= */
+
+/* ---- Page density ---- */
+.wrap{
+  padding: 14px 12px 28px;
+}
+.shell{
+  width: min(1020px, 100%);
+  gap: 12px;
+}
+
+/* ---- Header smaller ---- */
+.head{
+  padding: 14px 14px;
+  border-radius: 18px;
+}
+.title{
+  font-size: 20px;
+  font-weight: 900;
+}
+.sub{
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* ---- KPI compact ---- */
+.kpi{
+  padding: 12px;
+  border-radius: 16px;
+}
+.kpiVal{
+  font-size: 22px;
+}
+.kpiLabel{
+  font-size: 12px;
+}
+
+/* ---- Main panel ---- */
+.panelWide{
+  padding: 12px;
+  border-radius: 18px;
+}
+.panelHead{
+  margin-bottom: 10px;
+}
+
+/* ---- Mode pills ---- */
+.pill{
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.pillOn{
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+/* ---- Search ---- */
+.search{
+  height: 40px;
+  font-size: 14px;
+}
+
+/* ---- Lists: show ~5 rows then scroll ---- */
+.list,
+.participantList,
+.treeList{
+  max-height: 300px;
+  gap: 8px;
+  align-content: start;
+  grid-auto-rows: max-content;
+}
+
+/* ---- Rows compact ---- */
+.row{
+  padding: 10px 10px;
+  border-radius: 14px;
+}
+.rowTitle{
+  font-size: 14px;
+  font-weight: 900;
+}
+.rowMeta{
+  font-size: 11px;
+}
+
+/* ---- Badges smaller ---- */
+.badge,
+.badgeChecked{
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+/* ---- Chips ---- */
+.chip{
+  height: 20px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+/* ---- Primary / Ghost buttons ---- */
+.primary,
+.primaryBtn{
+  height: 40px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+.ghost{
+  height: 36px;
+  padding: 0 12px;
+}
+
+/* ---- Group header ---- */
+.groupHeader{
+  padding: 4px 2px 8px;
+  margin-bottom: 8px;
+}
+.groupHeaderTitle{
+  font-size: 15px;
+}
+.groupHeaderSub{
+  font-size: 11px;
+}
+
+/* ---- Embed (Kiosk) ---- */
+.embed{
+  border-radius: 18px;
+  margin-top: 8px;
+}
+
+/* =========================================================
+   OVERLAY – same compact logic as Cashier
+   ========================================================= */
+.overlayCard{
+  width: min(1040px, 100%);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.overlayHead{
+  padding: 12px 14px;
+}
+
+.overlayBody{
+  padding: 12px;
+  gap: 10px;
+  min-height: 0;
+}
+
+.overlayLeft,
+.overlayRight{
+  padding: 10px;
+}
+
+/* ---- Detail card ---- */
+.detailCard{
+  padding: 12px;
+}
+.detailTitle{
+  font-size: 14px;
+}
+.detailRow{
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+.detailName{
+  font-size: 13px;
+}
+
+/* ---- Browser tabs ---- */
+.browserTab{
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.browserPanel{
+  padding: 10px;
+}
+
+/* ---- Order list: max 5 items ---- */
+.orderList{
+  max-height: 260px;
+  overflow: auto;
+}
+
+/* ---- Notes ---- */
+.notesBox{
+  font-size: 11px;
+  padding: 10px;
+}
+
+/* ---- Status cards compact ---- */
+.statusCardRow{
+  padding: 10px;
+  border-radius: 14px;
+}
+.statusSvcTitle{
+  font-size: 13px;
+}
+.statusSvcMeta{
+  font-size: 11px;
+}
+.statusPill{
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+/* ---- Mobile ---- */
+@media (max-width: 720px){
+  .wrap{ padding: 10px; }
+  .panelWide{ padding: 10px; }
+  .list,
+  .participantList{
+    max-height: 240px;
+  }
+}
+

@@ -10,17 +10,11 @@ function todayKey() {
 }
 
 export async function nextGuestDisplayName() {
-  const today = todayKey();
-  const savedDate = localStorage.getItem(DATE_KEY);
+  const dateKey = toDateKeyISO(new Date());
 
-  if (savedDate !== today) {
-    localStorage.setItem(DATE_KEY, today);
-    localStorage.setItem(COUNT_KEY, "0");
-  }
+  // Count guest visits today (robust, deletion-safe)
+  const today = await db.visits.where("dateKey").equals(dateKey).toArray().catch(() => []);
+  const guestCount = (today || []).filter((v) => String(v?.type || "").toLowerCase() === "guest").length;
 
-  const cur = Number(localStorage.getItem(COUNT_KEY) || "0");
-  const next = cur + 1;
-  localStorage.setItem(COUNT_KEY, String(next));
-
-  return `Gast ${next}`;
+  return `Gast ${guestCount + 1}`;
 }
